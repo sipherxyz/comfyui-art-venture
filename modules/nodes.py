@@ -91,7 +91,7 @@ class UtilLoadImageFromUrl:
     CATEGORY = "image"
     FUNCTION = "load_image_from_url"
 
-    def load_image_from_url(self, url: str, name: str):
+    def load_image_from_url(self, url: str):
         response = requests.get(url, timeout=5)
         if response.status_code != 200:
             raise Exception(response.text)
@@ -144,6 +144,9 @@ class AVInputImageFromUrl(UtilLoadImageFromUrl):
         }
     
     CATEGORY = "Art Venture"
+
+    def load_image_from_url(self, url: str, name: str):
+        UtilLoadImageFromUrl.load_image_from_url(self, url)
 
 
 class AVOutputUploadImage:
