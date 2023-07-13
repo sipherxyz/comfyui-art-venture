@@ -20,6 +20,9 @@ Graph = Dict[str, List[str]]
 root_dir = os.path.dirname(inspect.getfile(PromptServer))
 workflows_dir = os.path.join(root_dir, "pysssss-workflows")
 
+virtual_nodes = {"Reroute"}
+input_nodes = {"AV_Input", "AV_InputImage"}
+
 checkpoint_checksums_map: Dict[str, Dict[str, str]] = {}
 checkpoint_args = {"ckpt_name", "model_hash", "checkpoint"}
 
@@ -181,26 +184,35 @@ def workflow_to_prompt(workflow, args: dict = {}):
 
     # build reroute map
     reroutes = {}
+    av_upload = None
     for node_id in sorted_nodes:
         node = nodes[node_id]
+        if node["type"] == "AV_UploadImage":
+            if av_upload is not None:
+                raise Exception(
+                    "Only one AV_UploadImage is allowed. Use ImagesConcat to merge images."
+                )
+            av_upload = node
+            continue
+
         if (
-            node["type"] == "Reroute"
+            node["type"] in virtual_nodes
             and isinstance(node["inputs"], list)
             and len(node["inputs"]) > 0
         ):
             input = node["inputs"][0]
             link = links.get(input["link"], None)
             if not link:
-                logger.error(f"Unknown link {input['link']}")
+                logger.error(f"Unknown link 1 {input['link']}")
                 continue
             [link_id, from_node, from_port, *_] = link
             reroutes.update({node_id: (from_node, from_port)})
 
     # apply primitive node value
-    primitive_nodes = {}
+    av_input_nodes = {}
     for node_id in sorted_nodes:
         node = nodes[node_id]
-        if node["type"] != "PrimitiveNode":
+        if node["type"] not in input_nodes:
             continue
 
         if len(node["widgets_values"]) > 1:
@@ -214,14 +226,14 @@ def workflow_to_prompt(workflow, args: dict = {}):
             for link_id in output.get("links", []):
                 link = links.get(link_id, None)
                 if not link:
-                    logger.error(f"Unknown link {link_id}")
+                    logger.error(f"Unknown link 2 {link_id}")
                     continue
                 [link_id, from_node, from_port, to_node, *_] = link
                 target = nodes.get(to_node, None)
                 if target is None:
                     logger.error(f"Unknown node {to_node}")
                     continue
-                if target["type"] == "Reroute":
+                if target["type"] in virtual_nodes:
                     _links.extend(get_links(target))
                 else:
                     _links.append(link)
@@ -234,7 +246,7 @@ def workflow_to_prompt(workflow, args: dict = {}):
             target = nodes.get(to_node, None)
             input = target.get("inputs")[to_port]
             input["value"] = node["widgets_values"][0]
-            primitive_nodes[arg_name] = (str(to_node), input["name"])
+            av_input_nodes[arg_name] = (str(to_node), input["name"])
 
     # build prompt
     prompt = {}
@@ -245,7 +257,7 @@ def workflow_to_prompt(workflow, args: dict = {}):
         if node.get("mode", 0) == 2:  # muted node
             continue
 
-        if node["type"] == "Reroute" or node["type"] == "PrimitiveNode":
+        if node["type"] in virtual_nodes or node["type"] in input_nodes:
             continue
 
         obj_class = ALL_NODE_CLASS_MAPPINGS.get(node["type"], None)
@@ -259,9 +271,11 @@ def workflow_to_prompt(workflow, args: dict = {}):
         # handle input links
         for input in node.get("inputs", []):
             link_id = input["link"]
+            if not link_id:
+                continue
             link = links.get(link_id, None)
             if not link:
-                logger.error(f"Unknown link {link_id}")
+                logger.error(f"Unknown link 3 {link_id}")
                 continue
             [link_id, from_node, from_port, *_] = link
             while from_node in reroutes:
@@ -288,7 +302,7 @@ def workflow_to_prompt(workflow, args: dict = {}):
                 )
                 prompt_inputs[k] = widget_value
                 widget_idx += 1
-                if is_seed_widget(node, k):
+                if k in seed_args:
                     widget_value = node.get("widgets_values", [])[widget_idx]
                     logger.debug(f"  control_after_generate: {widget_value}")
                     widget_idx += 1
@@ -299,7 +313,7 @@ def workflow_to_prompt(workflow, args: dict = {}):
         }
 
     # override args
-    for k, v in primitive_nodes.items():
+    for k, v in av_input_nodes.items():
         node_id, input_name = v
 
         if k in args:
@@ -323,6 +337,11 @@ def workflow_to_prompt(workflow, args: dict = {}):
                 seed = random.randint(0, 1125899906842624)
                 logger.debug(f"override seed value {k}: {seed}")
                 prompt[node_id]["inputs"][input_name] = seed
+
+    # set task_id
+    if av_upload and args.get("task_id", None):
+        logger.debug(f"arg value task_id: {args['task_id']}")
+        prompt[str(av_upload["id"])]["inputs"]["task_id"] = args["task_id"]
 
     logger.debug("parsed prompt", json.dumps(prompt))
     return prompt

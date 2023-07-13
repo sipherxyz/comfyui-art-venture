@@ -99,7 +99,6 @@ class ArtVentureRunner:
         failed_attempts = 0
         while True:
             if self.current_task_id is not None:
-                log.debug("Task is running, waiting for it to finish")
                 time.sleep(2)
                 continue
 
