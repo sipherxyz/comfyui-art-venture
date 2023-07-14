@@ -44,7 +44,7 @@ def upload_to_av(
     upload_url: str = None,
 ):
     if upload_url is None:
-        upload_url = config.get("av_endpoint") + "/api/receipt/sd-tasks"
+        upload_url = config.get("av_endpoint") + "/api/recipe/sd-tasks"
         if task_id is not None and task_id != "":
             upload_url += f"/complete/{task_id}"
         else:
@@ -69,7 +69,7 @@ def upload_to_av(
 
 
 def get_task_from_av():
-    get_task_url = config.get("av_endpoint") + "/api/receipt/sd-tasks/one-in-queue"
+    get_task_url = config.get("av_endpoint") + "/api/recipe/sd-tasks/one-in-queue"
     auth_token = config.get("av_token", None)
     headers = (
         {"Authorization": f"Bearer {auth_token}"}
