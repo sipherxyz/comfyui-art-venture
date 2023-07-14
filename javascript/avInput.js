@@ -251,7 +251,7 @@ app.registerExtension({
 				// We cant remove + re-add the output here as if you drag a link over the same link
 				// it removes, then re-adds, causing it to break
 				this.outputs[0].type = "*";
-				this.outputs[0].name = "Receipt Input";
+				this.outputs[0].name = "Recipe Input";
 				delete this.outputs[0].widget;
 
 				if (this.widgets) {
@@ -269,7 +269,7 @@ app.registerExtension({
 		LiteGraph.registerNodeType(
 			"AV_Input",
 			Object.assign(AVInputNode, {
-				title: "AV Receipt Input",
+				title: "AV Recipe Input",
 			})
 		);
 		AVInputNode.category = "Art Venture";

@@ -189,6 +189,6 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImagesConcat": "Images Concat",
     "LoadImageFromUrl": "Load Image From URL",
-    "AV_InputImage": "AV Receipt Image",
+    "AV_InputImage": "AV Recipe Image",
     "AV_UploadImage": "Upload to Art Venture",
 }

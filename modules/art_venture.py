@@ -51,23 +51,23 @@ class ArtVentureRunner:
         if data["has_task"] != True:
             return (None, None)
 
-        workflow = data.get("receipt_id", None)
+        workflow = data.get("recipe_id", None)
         args: dict = data.get("task", {})
         task_id = args.get("task_id")
-        log.info(f"Got new task {task_id} with receipt {workflow}")
+        log.info(f"Got new task {task_id} with recipe {workflow}")
 
         # validate workflow
         if isinstance(workflow, str):
             workflow = load_workflow(workflow)
 
         if workflow is None:
-            return (task_id, Exception("Missing receipt"))
+            return (task_id, Exception("Missing recipe"))
 
         prompt = workflow_to_prompt(workflow, args)
         valid = execution.validate_prompt(prompt)
         if not valid[0]:
-            log.error(f"Invalid receipt: {valid[3]}")
-            return (task_id, Exception("Invalid receipt"))
+            log.error(f"Invalid recipe: {valid[3]}")
+            return (task_id, Exception("Invalid recipe"))
 
         outputs_to_execute = valid[2]
         extra_data = {"extra_data": {"extra_pnginfo": {"workflow": workflow}}}
