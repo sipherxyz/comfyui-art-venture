@@ -34,6 +34,8 @@ seed_args = {"seed", "noise_seed"}
 
 
 def get_node_class_mapping():
+    global node_class_mappings_loaded
+
     if not node_class_mappings_loaded:
         from nodes import NODE_CLASS_MAPPINGS
 
