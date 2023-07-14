@@ -8,13 +8,14 @@ from datetime import datetime
 from typing import Dict, List
 
 from server import PromptServer
-from nodes import NODE_CLASS_MAPPINGS
 from folder_paths import models_dir, get_filename_list
 
 from .log import logger
 from .nodes import NODE_CLASS_MAPPINGS as _NODE_CLASS_MAPPINGS
 
-ALL_NODE_CLASS_MAPPINGS = {**NODE_CLASS_MAPPINGS, **_NODE_CLASS_MAPPINGS}
+node_class_mappings_loaded = False
+ALL_NODE_CLASS_MAPPINGS = {**_NODE_CLASS_MAPPINGS}
+
 Graph = Dict[str, List[str]]
 
 root_dir = os.path.dirname(inspect.getfile(PromptServer))
@@ -30,6 +31,16 @@ embeddings = set([e.split(".")[0].lower() for e in get_filename_list("embeddings
 promp_args = {"prompt", "negative_prompt"}
 
 seed_args = {"seed", "noise_seed"}
+
+
+def get_node_class_mapping():
+    if not node_class_mappings_loaded:
+        from nodes import NODE_CLASS_MAPPINGS
+
+        ALL_NODE_CLASS_MAPPINGS.update(NODE_CLASS_MAPPINGS)
+        node_class_mappings_loaded = True
+
+    return ALL_NODE_CLASS_MAPPINGS
 
 
 def __dfs_sort_helper(
@@ -260,7 +271,7 @@ def workflow_to_prompt(workflow, args: dict = {}):
         if node["type"] in virtual_nodes or node["type"] in input_nodes:
             continue
 
-        obj_class = ALL_NODE_CLASS_MAPPINGS.get(node["type"], None)
+        obj_class = get_node_class_mapping().get(node["type"], None)
         if obj_class is None:
             logger.error(f"Unknown node {node['type']}")
             continue

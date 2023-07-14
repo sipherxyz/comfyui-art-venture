@@ -1,4 +1,5 @@
 import os
+import time
 import shutil
 import threading
 from typing import Callable
@@ -71,6 +72,7 @@ def init():
     # update checkpoint hash in background
     def _update_checkpoints_hash(cb: Callable):
         update_checkpoints_hash()
+        time.sleep(10) # wait for server to start
         cb()
 
     def _cb():
