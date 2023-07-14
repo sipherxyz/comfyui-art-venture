@@ -78,8 +78,8 @@ def get_task_from_av():
     )
 
     response = requests.get(get_task_url, timeout=3, headers=headers)
-    if response.status_code != 200:
-        return (None, Exception(response.text))
+    if response.status_code >= 400:
+        raise Exception(response.text)
 
     data: Dict = response.json()
 

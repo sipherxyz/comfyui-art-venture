@@ -47,7 +47,12 @@ class ArtVentureRunner:
         if self.current_task_id is not None:
             return (None, None)
 
-        data = get_task_from_av()
+        try:
+            data = get_task_from_av()
+        except Exception as e:
+            log.error(f"Error while getting new task {e}")
+            return (None, e)
+
         if data["has_task"] != True:
             return (None, None)
 
