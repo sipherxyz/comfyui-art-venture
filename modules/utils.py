@@ -1,8 +1,9 @@
 import time
 import requests
 import traceback
-from typing import Callable
+from typing import Callable, Dict
 
+from ..config import config
 from .log import logger as log
 
 
@@ -34,6 +35,55 @@ def request_with_retry(
         log.error(e)
         log.debug(traceback.format_exc())
         return False
+
+
+def upload_to_av(
+    files: list,
+    additional_data: dict = {},
+    task_id: str = None,
+    upload_url: str = None,
+):
+    if upload_url is None:
+        upload_url = config.get("av_endpoint") + "/api/receipt/sd-tasks"
+        if task_id is not None and task_id != "":
+            upload_url += f"/complete/{task_id}"
+        else:
+            upload_url += "/upload"
+
+    auth_token = config.get("av_token")
+    headers = (
+        {"Authorization": f"Bearer {auth_token}"}
+        if auth_token and auth_token != ""
+        else None
+    )
+
+    upload = lambda: requests.post(
+        upload_url,
+        timeout=5,
+        headers=headers,
+        files=files,
+        data=additional_data,
+    )
+
+    return request_with_retry(upload)
+
+
+def get_task_from_av():
+    get_task_url = config.get("av_endpoint") + "/api/receipt/sd-tasks/one-in-queue"
+    auth_token = config.get("av_token", None)
+    headers = (
+        {"Authorization": f"Bearer {auth_token}"}
+        if auth_token and auth_token != ""
+        else None
+    )
+
+    response = requests.get(get_task_url, timeout=3, headers=headers)
+    if response.status_code != 200:
+        return (None, Exception(response.text))
+
+    data: Dict = response.json()
+
+    return data
 
 
 def get_dict_attribute(dict_inst: dict, name_string: str, default=None):

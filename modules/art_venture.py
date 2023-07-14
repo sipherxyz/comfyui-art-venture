@@ -2,21 +2,20 @@ import time
 import requests
 import threading
 import traceback
-from typing import Callable
+from typing import Callable, Dict
 from types import MethodType
 
-from .config import config
-from .modules.log import logger as log
-from .modules.nodes import upload_to_av
-from .modules.workflow import load_workflow, workflow_to_prompt
+from ..config import config
+from .log import logger as log
+from .workflow import load_workflow, workflow_to_prompt
+from .utils import get_task_from_av, upload_to_av
 
 from server import PromptServer
 import execution
 
 
 def upload_task_result(task_id: str, success: bool):
-    upload_url = config.get("av_endpoint") + f"/api/sd-tasks/complete/{task_id}"
-    return upload_to_av(None, {"success": success}, upload_url=upload_url)
+    return upload_to_av(None, additional_data={"success": success}, task_id=task_id)
 
 
 class ArtVentureRunner:
@@ -48,41 +47,27 @@ class ArtVentureRunner:
         if self.current_task_id is not None:
             return (None, None)
 
-        get_task_url = (
-            config.get("av_endpoint") + "/api/sd-tasks/one-in-queue?backend=comfy"
-        )
-        auth_token = config.get("av_token", None)
-        headers = (
-            {"Authorization": f"Bearer {auth_token}"}
-            if auth_token and auth_token != ""
-            else None
-        )
-
-        response = requests.get(get_task_url, timeout=3, headers=headers)
-        if response.status_code != 200:
-            raise Exception(response.text)
-
-        data: dict = response.json()
+        data = get_task_from_av()
         if data["has_task"] != True:
             return (None, None)
 
-        workflow = data.get("workflow", None)
+        workflow = data.get("receipt_id", None)
         args: dict = data.get("task", {})
         task_id = args.get("task_id")
-        log.info(f"Got new task {task_id} with workflow {workflow}")
+        log.info(f"Got new task {task_id} with receipt {workflow}")
 
         # validate workflow
         if isinstance(workflow, str):
             workflow = load_workflow(workflow)
 
         if workflow is None:
-            return (task_id, Exception("Missing workflow"))
+            return (task_id, Exception("Missing receipt"))
 
         prompt = workflow_to_prompt(workflow, args)
         valid = execution.validate_prompt(prompt)
         if not valid[0]:
-            log.error(f"Invalid prompt: {valid[3]}")
-            return (task_id, Exception("Invalid prompt"))
+            log.error(f"Invalid receipt: {valid[3]}")
+            return (task_id, Exception("Invalid receipt"))
 
         outputs_to_execute = valid[2]
         extra_data = {"extra_data": {"extra_pnginfo": {"workflow": workflow}}}

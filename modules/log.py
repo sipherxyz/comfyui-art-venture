@@ -25,4 +25,4 @@ else:
         def error(self, *args, **kwargs):
             self.__log(logging.ERROR, *args, **kwargs, file=sys.stderr)
 
-    logger = Log(level=logging.DEBUG)
+    logger = Log(level=logging.INFO)

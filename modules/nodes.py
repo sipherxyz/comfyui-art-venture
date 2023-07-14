@@ -8,42 +8,10 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 import numpy as np
 
-from ..config import config
-from .utils import request_with_retry
 from .log import logger as log
+from .utils import upload_to_av
 
 import folder_paths
-
-
-def upload_to_av(
-    files: list,
-    additional_data: dict = {},
-    upload_url: str = None,
-    task_id: str = None,
-):
-    if upload_url is None:
-        upload_url = config.get("av_endpoint") + "/api/sd-tasks"
-        if task_id is not None and task_id != "":
-            upload_url += f"/complete/{task_id}"
-        else:
-            upload_url += "/upload"
-
-    auth_token = config.get("av_token")
-    headers = (
-        {"Authorization": f"Bearer {auth_token}"}
-        if auth_token and auth_token != ""
-        else None
-    )
-
-    upload = lambda: requests.post(
-        upload_url,
-        timeout=5,
-        headers=headers,
-        files=files,
-        data=additional_data,
-    )
-
-    return request_with_retry(upload)
 
 
 class UtilImagesConcat:
@@ -63,15 +31,20 @@ class UtilImagesConcat:
     FUNCTION = "concat_images"
 
     def concat_images(self, images, images_2=None, images_3=None, images_4=None):
+        print("images", type(images), images)
+        print("images_2", type(images_2), images_2)
+        print("images_3", type(images_3), images_3)
+        print("images_4", type(images_4), images_4)
+
         all_images = []
-        all_images.extend(images)
+        all_images.extend(images if isinstance(images, list) else [images])
 
         if images_2 is not None:
-            all_images.extend(images_2)
+            all_images.extend(images_2 if isinstance(images_2, list) else [images_2])
         if images_3 is not None:
-            all_images.extend(images_3)
+            all_images.extend(images_3 if isinstance(images_3, list) else [images_3])
         if images_4 is not None:
-            all_images.extend(images_4)
+            all_images.extend(images_4 if isinstance(images_4, list) else [images_4])
 
         return all_images
 
@@ -142,11 +115,11 @@ class AVInputImageFromUrl(UtilLoadImageFromUrl):
                 "name": ("STRING", {"default": "image"}),
             },
         }
-    
+
     CATEGORY = "Art Venture"
 
     def load_image_from_url(self, url: str, name: str):
-        UtilLoadImageFromUrl.load_image_from_url(self, url)
+        return UtilLoadImageFromUrl.load_image_from_url(self, url)
 
 
 class AVOutputUploadImage:
@@ -155,7 +128,8 @@ class AVOutputUploadImage:
         return {
             "required": {"images": ("IMAGE",)},
             "optional": {
-                "task_id": "STRING",
+                "task_id": "TASK_ID",
+                "folder_id": ("STRING", {"multiline": False}),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -169,7 +143,12 @@ class AVOutputUploadImage:
     FUNCTION = "upload_images"
 
     def upload_images(
-        self, images, task_id: str = None, prompt=None, extra_pnginfo=None
+        self,
+        images,
+        task_id: str = None,
+        folder_id: str = None,
+        prompt=None,
+        extra_pnginfo=None,
     ):
         files = list()
         for idx, image in enumerate(images):
@@ -193,7 +172,11 @@ class AVOutputUploadImage:
                 )
             )
 
-        upload_to_av(files, additional_data={"success": True}, task_id=task_id)
+        additional_data = {"success": "true"}
+        if folder_id is not None:
+            additional_data["folderId"] = folder_id
+
+        upload_to_av(files, additional_data=additional_data, task_id=task_id)
         return ("Uploaded to ArtVenture!",)
 
 

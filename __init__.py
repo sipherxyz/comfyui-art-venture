@@ -7,7 +7,7 @@ from .config import get_ext_dir, get_comfy_dir
 from .modules.log import logger as log
 from .modules.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .modules.workflow import update_checkpoints_hash
-from .art_venture import ArtVentureRunner
+from .modules.art_venture import ArtVentureRunner
 
 
 def get_web_ext_dir():
