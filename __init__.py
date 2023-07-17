@@ -1,7 +1,8 @@
 import os
 import time
 import shutil
-import threading
+from threading import Thread
+from types import MethodType
 from typing import Callable
 
 from .config import get_ext_dir, get_comfy_dir
@@ -9,6 +10,8 @@ from .modules.log import logger as log
 from .modules.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .modules.workflow import update_checkpoints_hash
 from .modules.art_venture import ArtVentureRunner
+
+from server import PromptServer
 
 
 def get_web_ext_dir():
@@ -71,16 +74,21 @@ def init():
 
     # update checkpoint hash in background
     def _update_checkpoints_hash(cb: Callable):
+        # hijack PromptServer
+        orig_add_routes = PromptServer.instance.add_routes
+
+        def add_routes(self):
+            cb()
+            orig_add_routes()
+
+        PromptServer.instance.add_routes = MethodType(add_routes, PromptServer.instance)
+
         update_checkpoints_hash()
-        time.sleep(10) # wait for server to start
-        cb()
 
     def _cb():
         ArtVentureRunner().watching_for_new_task_threading()
 
-    background_thread = threading.Thread(target=_update_checkpoints_hash, args=(_cb,))
-    background_thread.daemon = True
-    background_thread.start()
+    Thread(target=_update_checkpoints_hash, args=(_cb,), daemon=True).start()
 
 
 init()

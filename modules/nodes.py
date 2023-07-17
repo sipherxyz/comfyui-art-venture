@@ -102,26 +102,6 @@ class UtilLoadImageFromUrl:
         return {"ui": {"images": [preview]}, "result": (image, mask)}
 
 
-class AVInputImageFromUrl(UtilLoadImageFromUrl):
-    def __init__(self) -> None:
-        super().__init__()
-        self.filename_prefix = "AV_InputImage"
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "url": ("STRING", {"default": ""}),
-                "name": ("STRING", {"default": "image"}),
-            },
-        }
-
-    CATEGORY = "Art Venture"
-
-    def load_image_from_url(self, url: str, name: str):
-        return UtilLoadImageFromUrl.load_image_from_url(self, url)
-
-
 class AVOutputUploadImage:
     @classmethod
     def INPUT_TYPES(s):
@@ -183,12 +163,10 @@ class AVOutputUploadImage:
 NODE_CLASS_MAPPINGS = {
     "ImagesConcat": UtilImagesConcat,
     "LoadImageFromUrl": UtilLoadImageFromUrl,
-    "AV_InputImage": AVInputImageFromUrl,
     "AV_UploadImage": AVOutputUploadImage,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImagesConcat": "Images Concat",
     "LoadImageFromUrl": "Load Image From URL",
-    "AV_InputImage": "AV Recipe Image",
     "AV_UploadImage": "Upload to Art Venture",
 }

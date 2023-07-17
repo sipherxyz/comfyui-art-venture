@@ -22,7 +22,7 @@ root_dir = os.path.dirname(inspect.getfile(PromptServer))
 workflows_dir = os.path.join(root_dir, "pysssss-workflows")
 
 virtual_nodes = {"Reroute"}
-input_nodes = {"AV_Input", "AV_InputImage"}
+input_nodes = {"AV_Input"}
 
 checkpoint_checksums_map: Dict[str, Dict[str, str]] = {}
 checkpoint_args = {"ckpt_name", "model_hash", "checkpoint"}

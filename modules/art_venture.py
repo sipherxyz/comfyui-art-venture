@@ -2,7 +2,7 @@ import time
 import requests
 import threading
 import traceback
-from typing import Callable, Dict
+from typing import Callable
 from types import MethodType
 
 from ..config import config
@@ -115,7 +115,7 @@ class ArtVentureRunner:
 
     def watching_for_new_task_threading(self):
         if config.get("runner_enabled", False) != True:
-            log.info("[ArtVenture] Runner is disabled")
+            log.info("Runner is disabled")
             return
 
         if self.current_thread is not None and self.current_thread.is_alive():
