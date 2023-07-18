@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Dict, List
 
 from server import PromptServer
-from folder_paths import models_dir, get_filename_list
+from folder_paths import models_dir, get_filename_list, get_full_path
 
 from .log import logger
 from .nodes import NODE_CLASS_MAPPINGS as _NODE_CLASS_MAPPINGS
@@ -134,7 +134,7 @@ def update_checkpoints_hash():
     # Calculate checksum for each file in the folder
     new_checksums = {}
     for checkpoint in get_filename_list("checkpoints"):
-        file_path = os.path.join(checkpoint_dir, checkpoint)
+        file_path = get_full_path("checkpoints", checkpoint)
 
         # Get the last modified date of the file
         last_modified = datetime.fromtimestamp(os.path.getmtime(file_path))
