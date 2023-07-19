@@ -338,8 +338,8 @@ def workflow_to_prompt(workflow, args: dict = {}):
         # random seed
         if k in seed_args:
             seed = int(prompt[node_id]["inputs"][input_name])
-            if seed < 0:
-                seed = random.randint(0, 1125899906842624)
+            if seed == 0:
+                seed = random.randint(1, 1125899906842624)
                 logger.debug(f"override seed value {k}: {seed}")
                 prompt[node_id]["inputs"][input_name] = seed
 
