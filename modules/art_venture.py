@@ -207,7 +207,8 @@ class ArtVentureRunner:
                         )
                         filename = image.get("filename")
                         subfolder = image.get("subfolder", "")
-                        images.append(os.path.join(outdir, subfolder, filename))
+                        if type == "output" or subfolder == "output":
+                            images.append(os.path.join(outdir, subfolder, filename))
 
             log.info(f"Task {task_id} finished with {len(images)} image(s)")
             update_task_result(task_id, True, images)
