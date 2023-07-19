@@ -1,8 +1,10 @@
+import os
 import time
+import pathlib
 import requests
 import threading
 import traceback
-from typing import Callable
+from typing import Callable, Dict, List
 from types import MethodType
 
 from ..config import config
@@ -10,12 +12,75 @@ from .log import logger as log
 from .workflow import load_workflow, workflow_to_prompt
 from .utils import get_task_from_av, upload_to_av
 
+import folder_paths
 from server import PromptServer
-import execution
+from execution import validate_prompt, PromptExecutor
 
 
-def upload_task_result(task_id: str, success: bool):
-    return upload_to_av(None, additional_data={"success": success}, task_id=task_id)
+def update_task_result(task_id: str, success: bool, images: List[str] = None):
+    files = None
+    if images is not None:
+        files = []
+        for img in images:
+            img_path = pathlib.Path(img)
+            ext = img_path.suffix.lower()
+            content_type = f"image/{ext[1:]}"
+            files.append(
+                (
+                    "files",
+                    (img_path.name, open(os.path.abspath(img), "rb"), content_type),
+                )
+            )
+
+    return upload_to_av(
+        files,
+        additional_data={"success": str(success).lower()},
+        task_id=task_id,
+    )
+
+
+def patch_comfy():
+    # monky patch PromptQueue
+    orig_task_done = PromptServer.instance.prompt_queue.task_done
+
+    def handle_task_done(queue, item_id, outputs):
+        item = queue.currently_running.get(item_id, None)
+        if item:
+            task_id = item[1]
+            ArtVentureRunner.instance.on_task_finished(task_id, outputs)
+
+        orig_task_done(item_id, outputs)
+
+    PromptServer.instance.prompt_queue.task_done = MethodType(
+        handle_task_done, PromptServer.instance.prompt_queue
+    )
+
+    # monky patch PromptExecutor
+    PromptExecutor.orig_handle_execution_error = PromptExecutor.handle_execution_error
+
+    def handle_execution_error(
+        self, prompt_id, prompt, current_outputs, executed, error, ex
+    ):
+        node_id = error["node_id"]
+        class_type = prompt[node_id]["class_type"]
+        mes = {
+            "type": error["exception_type"],
+            "message": error["exception_message"],
+        }
+        details = {
+            "node_id": node_id,
+            "node_type": class_type,
+            "traceback": error["traceback"],
+        }
+        ArtVentureRunner.instance.current_task_exception = {
+            "error": mes,
+            "details": details,
+        }
+        self.orig_handle_execution_error(
+            self, prompt_id, prompt, current_outputs, executed, error, ex
+        )
+
+    PromptExecutor.handle_execution_error = handle_execution_error
 
 
 class ArtVentureRunner:
@@ -23,22 +88,11 @@ class ArtVentureRunner:
 
     def __init__(self) -> None:
         self.current_task_id: str = None
+        self.current_task_exception = None
         self.current_thread: threading.Thread = None
         ArtVentureRunner.instance = self
 
-        # hijack PromptQueue
-        orig_task_done = PromptServer.instance.prompt_queue.task_done
-
-        def task_done(self, item_id, outputs):
-            item = self.currently_running.get(item_id, None)
-            if item:
-                task_id = item[1]
-                ArtVentureRunner.instance.on_task_finished(task_id)
-            orig_task_done(item_id, outputs)
-
-        PromptServer.instance.prompt_queue.task_done = MethodType(
-            task_done, PromptServer.instance.prompt_queue
-        )
+        patch_comfy()
 
     def get_new_task(self):
         if config.get("runner_enabled", False) != True:
@@ -69,7 +123,7 @@ class ArtVentureRunner:
             return (task_id, Exception("Missing recipe"))
 
         prompt = workflow_to_prompt(workflow, args)
-        valid = execution.validate_prompt(prompt)
+        valid = validate_prompt(prompt)
         if not valid[0]:
             log.error(f"Invalid recipe: {valid[3]}")
             return (task_id, Exception("Invalid recipe"))
@@ -81,6 +135,7 @@ class ArtVentureRunner:
         )
 
         self.current_task_id = task_id
+        self.current_task_exception = None
         return (task_id, None)
 
     def watching_for_new_task(self, get_task: Callable):
@@ -97,7 +152,7 @@ class ArtVentureRunner:
                 if api_task_id and e is not None:
                     log.error("[ArtVenture] Error while getting new task")
                     log.error(e)
-                    upload_task_result(api_task_id, False)
+                    update_task_result(api_task_id, False)
                     failed_attempts += 1
                 else:
                     failed_attempts = 0
@@ -130,9 +185,32 @@ class ArtVentureRunner:
     def on_task_finished(
         self,
         task_id: str,
+        outputs: Dict,
     ):
         if task_id != self.current_task_id:
             return
 
-        log.info(f"Task {task_id} finished")
+        if self.current_task_exception is not None:
+            log.info(f"Task {task_id} failed: {self.current_task_exception}")
+            update_task_result(task_id, False)
+        else:
+            images = []
+            for k, v in outputs.items():
+                files = v.get("images", [])
+                for image in files:
+                    type = image.get("type", None)
+                    if type in {"temp", "output"}:
+                        outdir = (
+                            folder_paths.get_output_directory()
+                            if type == "output"
+                            else folder_paths.get_temp_directory()
+                        )
+                        filename = image.get("filename")
+                        subfolder = image.get("subfolder", "")
+                        images.append(os.path.join(outdir, subfolder, filename))
+
+            log.info(f"Task {task_id} finished with {len(images)} image(s)")
+            update_task_result(task_id, True, images)
+
         self.current_task_id = None
+        self.current_task_exception = None

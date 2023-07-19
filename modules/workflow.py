@@ -197,16 +197,8 @@ def workflow_to_prompt(workflow, args: dict = {}):
 
     # build reroute map
     reroutes = {}
-    av_upload = None
     for node_id in sorted_nodes:
         node = nodes[node_id]
-        if node["type"] == "AV_UploadImage":
-            if av_upload is not None:
-                raise Exception(
-                    "Only one AV_UploadImage is allowed. Use ImagesConcat to merge images."
-                )
-            av_upload = node
-            continue
 
         if (
             node["type"] in virtual_nodes
@@ -350,11 +342,6 @@ def workflow_to_prompt(workflow, args: dict = {}):
                 seed = random.randint(0, 1125899906842624)
                 logger.debug(f"override seed value {k}: {seed}")
                 prompt[node_id]["inputs"][input_name] = seed
-
-    # set task_id
-    if av_upload and args.get("task_id", None):
-        logger.debug(f"arg value task_id: {args['task_id']}")
-        prompt[str(av_upload["id"])]["inputs"]["task_id"] = args["task_id"]
 
     logger.debug("parsed prompt", json.dumps(prompt))
     return prompt

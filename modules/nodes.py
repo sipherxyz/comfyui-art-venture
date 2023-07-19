@@ -108,7 +108,6 @@ class AVOutputUploadImage:
         return {
             "required": {"images": ("IMAGE",)},
             "optional": {
-                "task_id": "TASK_ID",
                 "folder_id": ("STRING", {"multiline": False}),
             },
             "hidden": {
@@ -125,7 +124,6 @@ class AVOutputUploadImage:
     def upload_images(
         self,
         images,
-        task_id: str = None,
         folder_id: str = None,
         prompt=None,
         extra_pnginfo=None,
@@ -156,7 +154,7 @@ class AVOutputUploadImage:
         if folder_id is not None:
             additional_data["folderId"] = folder_id
 
-        upload_to_av(files, additional_data=additional_data, task_id=task_id)
+        upload_to_av(files, additional_data=additional_data)
         return ("Uploaded to ArtVenture!",)
 
 
