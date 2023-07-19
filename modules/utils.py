@@ -59,7 +59,7 @@ def upload_to_av(
 
     upload = lambda: requests.post(
         upload_url,
-        timeout=5,
+        timeout=30,
         headers=headers,
         files=files,
         data=additional_data,
@@ -77,7 +77,7 @@ def get_task_from_av():
         else None
     )
 
-    response = requests.get(get_task_url, timeout=3, headers=headers)
+    response = requests.get(get_task_url, timeout=10, headers=headers)
     if response.status_code >= 400:
         raise Exception(response.text)
 
