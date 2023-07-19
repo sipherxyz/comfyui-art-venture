@@ -77,7 +77,7 @@ def patch_comfy():
             "details": details,
         }
         self.orig_handle_execution_error(
-            self, prompt_id, prompt, current_outputs, executed, error, ex
+            prompt_id, prompt, current_outputs, executed, error, ex
         )
 
     PromptExecutor.handle_execution_error = handle_execution_error
@@ -207,7 +207,7 @@ class ArtVentureRunner:
 
             log.info(f"Task {task_id} finished with {len(images)} image(s)")
             update_task_result(task_id, True, images)
-            if (config.get("remove_runner_images_after_upload", False)):
+            if config.get("remove_runner_images_after_upload", False):
                 for img in images:
                     os.remove(img)
 
