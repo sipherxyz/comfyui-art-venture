@@ -195,23 +195,21 @@ class ArtVentureRunner:
             update_task_result(task_id, False)
         else:
             images = []
+            outdir = folder_paths.get_output_directory()
             for k, v in outputs.items():
                 files = v.get("images", [])
                 for image in files:
                     type = image.get("type", None)
-                    if type in {"temp", "output"}:
-                        outdir = (
-                            folder_paths.get_output_directory()
-                            if type == "output"
-                            else folder_paths.get_temp_directory()
-                        )
+                    if type == "output":
                         filename = image.get("filename")
                         subfolder = image.get("subfolder", "")
-                        if type == "output" or subfolder == "output":
-                            images.append(os.path.join(outdir, subfolder, filename))
+                        images.append(os.path.join(outdir, subfolder, filename))
 
             log.info(f"Task {task_id} finished with {len(images)} image(s)")
             update_task_result(task_id, True, images)
+            if (config.get("remove_runner_images_after_upload", False)):
+                for img in images:
+                    os.remove(img)
 
         self.current_task_id = None
         self.current_task_exception = None

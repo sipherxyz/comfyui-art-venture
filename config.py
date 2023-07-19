@@ -42,6 +42,7 @@ def load_config() -> Dict:
         "av_endpoint": "https://api.artventure.ai",
         "av_token": "",
         "runner_enabled": False,
+        "remove_runner_images_after_upload": False
     }
 
     if not os.path.isfile(config_path):
