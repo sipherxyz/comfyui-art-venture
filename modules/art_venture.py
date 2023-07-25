@@ -4,12 +4,12 @@ import pathlib
 import requests
 import threading
 import traceback
+from uuid import uuid4
 from typing import Callable, Dict, List
 from types import MethodType
 
 from ..config import config
 from .log import logger as log
-from .workflow import load_workflow, workflow_to_prompt
 from .utils import get_task_from_av, upload_to_av
 
 import folder_paths
@@ -17,7 +17,7 @@ from server import PromptServer
 from execution import validate_prompt, PromptExecutor
 
 
-def update_task_result(task_id: str, success: bool, images: List[str] = None):
+def update_task_result(callback_url: str, success: bool, images: List[str] = None):
     files = None
     if images is not None:
         files = []
@@ -35,7 +35,7 @@ def update_task_result(task_id: str, success: bool, images: List[str] = None):
     return upload_to_av(
         files,
         additional_data={"success": str(success).lower()},
-        task_id=task_id,
+        upload_url=callback_url,
     )
 
 
@@ -88,6 +88,7 @@ class ArtVentureRunner:
 
     def __init__(self) -> None:
         self.current_task_id: str = None
+        self.callback_url: str = None
         self.current_task_exception = None
         self.current_thread: threading.Thread = None
         ArtVentureRunner.instance = self
@@ -110,33 +111,27 @@ class ArtVentureRunner:
         if data["has_task"] != True:
             return (None, None)
 
-        workflow = data.get("recipe_id", None)
-        args: dict = data.get("task", {})
-        task_id = args.get("task_id")
-        log.info(f"Got new task {task_id} with recipe {workflow}")
+        prompt = data.get("prompt")
+        callback_url: str = data.get("callback_url")
+        log.info(f"Got new task")
+        log.debug(prompt)
 
-        # validate workflow
-        if isinstance(workflow, str):
-            workflow = load_workflow(workflow)
-
-        if workflow is None:
-            return (task_id, Exception("Missing recipe"))
-
-        prompt = workflow_to_prompt(workflow, args)
         valid = validate_prompt(prompt)
         if not valid[0]:
             log.error(f"Invalid recipe: {valid[3]}")
-            return (task_id, Exception("Invalid recipe"))
+            return (callback_url, Exception("Invalid recipe"))
 
+        task_id = str(uuid4())
         outputs_to_execute = valid[2]
-        extra_data = {"extra_data": {"extra_pnginfo": {"workflow": workflow}}}
         PromptServer.instance.prompt_queue.put(
-            (0, task_id, prompt, extra_data, outputs_to_execute)
+            (0, task_id, prompt, {}, outputs_to_execute)
         )
 
+        log.info(f"Task registered with id {task_id}")
         self.current_task_id = task_id
+        self.callback_url = callback_url
         self.current_task_exception = None
-        return (task_id, None)
+        return (callback_url, None)
 
     def watching_for_new_task(self, get_task: Callable):
         log.info("Watching for new task")
@@ -148,11 +143,11 @@ class ArtVentureRunner:
                 continue
 
             try:
-                api_task_id, e = get_task()
-                if api_task_id and e is not None:
-                    log.error("[ArtVenture] Error while getting new task")
+                callback_url, e = get_task()
+                if callback_url and e is not None:
+                    log.error("Error while getting new task")
                     log.error(e)
-                    update_task_result(api_task_id, False)
+                    update_task_result(callback_url, False)
                     failed_attempts += 1
                 else:
                     failed_attempts = 0
@@ -192,7 +187,7 @@ class ArtVentureRunner:
 
         if self.current_task_exception is not None:
             log.info(f"Task {task_id} failed: {self.current_task_exception}")
-            update_task_result(task_id, False)
+            update_task_result(callback_url=self.callback_url, success=False)
         else:
             images = []
             outdir = folder_paths.get_output_directory()
@@ -206,10 +201,12 @@ class ArtVentureRunner:
                         images.append(os.path.join(outdir, subfolder, filename))
 
             log.info(f"Task {task_id} finished with {len(images)} image(s)")
-            update_task_result(task_id, True, images)
+            update_task_result(self.callback_url, True, images)
             if config.get("remove_runner_images_after_upload", False):
                 for img in images:
-                    os.remove(img)
+                    if os.path.exists(img):
+                        os.remove(img)
 
         self.current_task_id = None
+        self.callback_url = None
         self.current_task_exception = None
