@@ -64,13 +64,13 @@ def patch_comfy():
         node_id = error["node_id"]
         class_type = prompt[node_id]["class_type"]
         mes = {
-            "type": error["exception_type"],
-            "message": error["exception_message"],
+            "type": error.get("exception_type", ex.__class__.__name__),
+            "message": error.get("exception_message", str(ex)),
         }
         details = {
             "node_id": node_id,
             "node_type": class_type,
-            "traceback": error["traceback"],
+            "traceback": error.get("traceback", None),
         }
         ArtVentureRunner.instance.current_task_exception = {
             "error": mes,
