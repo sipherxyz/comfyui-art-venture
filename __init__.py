@@ -6,7 +6,7 @@ from types import MethodType
 from typing import Callable
 
 from .config import get_ext_dir, get_comfy_dir
-from .modules.log import logger as log
+from .modules.logger import logger
 from .modules.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 from .modules.workflow import update_checkpoints_hash
 from .modules.art_venture import ArtVentureRunner
@@ -52,20 +52,20 @@ def is_junction(path):
 def install_js():
     src_dir = get_ext_dir("javascript")
     if not os.path.exists(src_dir):
-        log.error("No JS")
+        logger.error("No JS")
         return
 
     dst_dir = get_web_ext_dir()
 
     if os.path.exists(dst_dir):
         if os.path.islink(dst_dir) or is_junction(dst_dir):
-            log.info("JS already linked")
+            logger.info("JS already linked")
             return
     elif link_js(src_dir, dst_dir):
-        log.info("JS linked")
+        logger.info("JS linked")
         return
 
-    log.info("Unable to make symlink, copying JS files")
+    logger.info("Unable to make symlink, copying JS files")
     shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
 
 

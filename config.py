@@ -5,7 +5,7 @@ from typing import Dict
 
 from server import PromptServer
 
-from .modules.log import logger
+from .modules.logger import logger
 
 comfy_dir = os.path.dirname(inspect.getfile(PromptServer))
 ext_dir = os.path.dirname(os.path.realpath(__file__))
@@ -42,7 +42,7 @@ def load_config() -> Dict:
         "av_endpoint": "https://api.artventure.ai",
         "av_token": "",
         "runner_enabled": False,
-        "remove_runner_images_after_upload": False
+        "remove_runner_images_after_upload": False,
     }
 
     if not os.path.isfile(config_path):
@@ -51,6 +51,15 @@ def load_config() -> Dict:
 
     with open(config_path, "r") as f:
         config = json.load(f)
+
+        need_update = False
+        for key, value in default_config.items():
+            if key not in config:
+                config[key] = value
+                need_update = True
+
+        if need_update:
+            write_config(config)
 
     logger.debug(f"Loaded config {config}")
     return config

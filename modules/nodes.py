@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 import numpy as np
 
-from .log import logger as log
+from .logger import logger
 from .utils import upload_to_av
 
 import folder_paths
@@ -137,7 +137,7 @@ class AVOutputUploadImage:
                 metadata.add_text("prompt", json.dumps(prompt))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
-                    log.debug(f"Adding {x} to pnginfo: {extra_pnginfo[x]}")
+                    logger.debug(f"Adding {x} to pnginfo: {extra_pnginfo[x]}")
                     metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
             buffer = io.BytesIO()

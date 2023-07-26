@@ -9,7 +9,7 @@ from typing import Callable, Dict, List
 from types import MethodType
 
 from ..config import config
-from .log import logger as log
+from .logger import logger
 from .utils import get_task_from_av, upload_to_av
 
 import folder_paths
@@ -105,7 +105,7 @@ class ArtVentureRunner:
         try:
             data = get_task_from_av()
         except Exception as e:
-            log.error(f"Error while getting new task {e}")
+            logger.error(f"Error while getting new task {e}")
             return (None, e)
 
         if data["has_task"] != True:
@@ -113,12 +113,12 @@ class ArtVentureRunner:
 
         prompt = data.get("prompt")
         callback_url: str = data.get("callback_url")
-        log.info(f"Got new task")
-        log.debug(prompt)
+        logger.info(f"Got new task")
+        logger.debug(prompt)
 
         valid = validate_prompt(prompt)
         if not valid[0]:
-            log.error(f"Invalid recipe: {valid[3]}")
+            logger.error(f"Invalid recipe: {valid[3]}")
             return (callback_url, Exception("Invalid recipe"))
 
         task_id = str(uuid4())
@@ -127,14 +127,14 @@ class ArtVentureRunner:
             (0, task_id, prompt, {}, outputs_to_execute)
         )
 
-        log.info(f"Task registered with id {task_id}")
+        logger.info(f"Task registered with id {task_id}")
         self.current_task_id = task_id
         self.callback_url = callback_url
         self.current_task_exception = None
         return (callback_url, None)
 
     def watching_for_new_task(self, get_task: Callable):
-        log.info("Watching for new task")
+        logger.info("Watching for new task")
 
         failed_attempts = 0
         while True:
@@ -145,19 +145,19 @@ class ArtVentureRunner:
             try:
                 callback_url, e = get_task()
                 if callback_url and e is not None:
-                    log.error("Error while getting new task")
-                    log.error(e)
+                    logger.error("Error while getting new task")
+                    logger.error(e)
                     update_task_result(callback_url, False)
                     failed_attempts += 1
                 else:
                     failed_attempts = 0
             except requests.exceptions.ConnectionError:
-                log.error("Connection error while getting new task")
+                logger.error("Connection error while getting new task")
                 failed_attempts += 1
             except Exception as e:
-                log.error("Error while getting new task")
-                log.error(e)
-                log.debug(traceback.format_exc())
+                logger.error("Error while getting new task")
+                logger.error(e)
+                logger.debug(traceback.format_exc())
                 failed_attempts += 1
 
             # increase sleep time based on failed attempts
@@ -165,7 +165,7 @@ class ArtVentureRunner:
 
     def watching_for_new_task_threading(self):
         if config.get("runner_enabled", False) != True:
-            log.info("Runner is disabled")
+            logger.info("Runner is disabled")
             return
 
         if self.current_thread is not None and self.current_thread.is_alive():
@@ -186,7 +186,7 @@ class ArtVentureRunner:
             return
 
         if self.current_task_exception is not None:
-            log.info(f"Task {task_id} failed: {self.current_task_exception}")
+            logger.info(f"Task {task_id} failed: {self.current_task_exception}")
             update_task_result(callback_url=self.callback_url, success=False)
         else:
             images = []
@@ -200,7 +200,7 @@ class ArtVentureRunner:
                         subfolder = image.get("subfolder", "")
                         images.append(os.path.join(outdir, subfolder, filename))
 
-            log.info(f"Task {task_id} finished with {len(images)} image(s)")
+            logger.info(f"Task {task_id} finished with {len(images)} image(s)")
             update_task_result(self.callback_url, True, images)
             if config.get("remove_runner_images_after_upload", False):
                 for img in images:

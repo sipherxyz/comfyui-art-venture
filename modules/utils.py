@@ -4,7 +4,7 @@ import traceback
 from typing import Callable, Dict
 
 from ..config import config
-from .log import logger as log
+from .logger import logger
 
 
 def request_with_retry(
@@ -19,21 +19,21 @@ def request_with_retry(
 
         return True
     except requests.exceptions.ConnectionError:
-        log.error("Connection error")
+        logger.error("Connection error")
         if retries >= max_try - 1:
             return False
 
         time.sleep(2)
-        log.info(f"Retrying {retries + 1}...")
+        logger.info(f"Retrying {retries + 1}...")
         return request_with_retry(
             make_request,
             max_try=max_try,
             retries=retries + 1,
         )
     except Exception as e:
-        log.error("Request error")
-        log.error(e)
-        log.debug(traceback.format_exc())
+        logger.error("Request error")
+        logger.error(e)
+        logger.debug(traceback.format_exc())
         return False
 
 

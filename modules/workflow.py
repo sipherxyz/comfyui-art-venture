@@ -10,7 +10,7 @@ from typing import Dict, List
 from server import PromptServer
 from folder_paths import models_dir, get_filename_list, get_full_path
 
-from .log import logger
+from .logger import logger
 from .nodes import NODE_CLASS_MAPPINGS as _NODE_CLASS_MAPPINGS
 
 node_class_mappings_loaded = False
