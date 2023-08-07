@@ -2,6 +2,7 @@ import io
 import os
 import json
 import torch
+import base64
 import requests
 
 from PIL import Image, ImageOps
@@ -12,41 +13,6 @@ from .logger import logger
 from .utils import upload_to_av
 
 import folder_paths
-
-
-class UtilImagesConcat:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {"images": ("IMAGE",)},
-            "optional": {
-                "images_2": ("IMAGE",),
-                "images_3": ("IMAGE",),
-                "images_4": ("IMAGE",),
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture"
-    FUNCTION = "concat_images"
-
-    def concat_images(self, images, images_2=None, images_3=None, images_4=None):
-        print("images", type(images), images)
-        print("images_2", type(images_2), images_2)
-        print("images_3", type(images_3), images_3)
-        print("images_4", type(images_4), images_4)
-
-        all_images = []
-        all_images.extend(images if isinstance(images, list) else [images])
-
-        if images_2 is not None:
-            all_images.extend(images_2 if isinstance(images_2, list) else [images_2])
-        if images_3 is not None:
-            all_images.extend(images_3 if isinstance(images_3, list) else [images_3])
-        if images_4 is not None:
-            all_images.extend(images_4 if isinstance(images_4, list) else [images_4])
-
-        return all_images
 
 
 class UtilLoadImageFromUrl:
@@ -65,11 +31,15 @@ class UtilLoadImageFromUrl:
     FUNCTION = "load_image_from_url"
 
     def load_image_from_url(self, url: str):
-        response = requests.get(url, timeout=5)
-        if response.status_code != 200:
-            raise Exception(response.text)
+        if url.startswith("data:image/"):
+            i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
+        else:
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                raise Exception(response.text)
 
-        i = Image.open(io.BytesIO(response.content))
+            i = Image.open(io.BytesIO(response.content))
+
         i = ImageOps.exif_transpose(i)
         image = i.convert("RGB")
 
@@ -159,12 +129,10 @@ class AVOutputUploadImage:
 
 
 NODE_CLASS_MAPPINGS = {
-    "ImagesConcat": UtilImagesConcat,
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "AV_UploadImage": AVOutputUploadImage,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImagesConcat": "Images Concat",
     "LoadImageFromUrl": "Load Image From URL",
     "AV_UploadImage": "Upload to Art Venture",
 }
