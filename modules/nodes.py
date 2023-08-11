@@ -4,6 +4,7 @@ import json
 import torch
 import base64
 import requests
+from typing import Dict
 
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
@@ -128,11 +129,188 @@ class AVOutputUploadImage:
         return ("Uploaded to ArtVenture!",)
 
 
+class AVCheckpointModelsToParametersPipe:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "pipe": ("PIPE",),
+                "ckpt_name": ("STRING", {"multiline": False}),
+                "secondary_ckpt_name": ("STRING", {"multiline": False}),
+                "vae_name": ("STRING", {"multiline": False}),
+                "upscaler_name": ("STRING", {"multiline": False}),
+                "secondary_upscaler_name": ("STRING", {"multiline": False}),
+                "lora_1_name": ("STRING", {"multiline": False}),
+                "lora_2_name": ("STRING", {"multiline": False}),
+                "lora_3_name": ("STRING", {"multiline": False}),
+            },
+        }
+
+    RETURN_TYPES = ("PIPE",)
+    CATEGORY = "Art Venture"
+    FUNCTION = "checkpoint_models_to_parameter_pipe"
+
+    def checkpoint_models_to_parameter_pipe(
+        self,
+        pipe: Dict = {},
+        ckpt_name=None,
+        secondary_ckpt_name=None,
+        vae_name=None,
+        upscaler_name=None,
+        secondary_upscaler_name=None,
+        lora_1_name=None,
+        lora_2_name=None,
+        lora_3_name=None,
+    ):
+        pipe["ckpt_name"] = ckpt_name
+        pipe["secondary_ckpt_name"] = secondary_ckpt_name
+        pipe["vae_name"] = vae_name
+        pipe["upscaler_name"] = upscaler_name
+        pipe["secondary_upscaler_name"] = secondary_upscaler_name
+        pipe["lora_1_name"] = lora_1_name
+        pipe["lora_2_name"] = lora_2_name
+        pipe["lora_3_name"] = lora_3_name
+        return (pipe,)
+
+
+class AVPromptsToParametersPipe:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "pipe": ("PIPE",),
+                "positive": ("STRING", {"multiline": True, "default": "Positive"}),
+                "negative": ("STRING", {"multiline": True, "default": "Negative"}),
+                "image": ("IMAGE",),
+                "mask": ("MASK",),
+            },
+        }
+
+    RETURN_TYPES = ("PIPE",)
+    CATEGORY = "Art Venture"
+    FUNCTION = "prompt_to_parameter_pipe"
+
+    def prompt_to_parameter_pipe(
+        self, pipe: Dict = {}, positive=None, negative=None, image=None, mask=None
+    ):
+        pipe["positive"] = positive
+        pipe["negative"] = negative
+        pipe["image"] = image
+        pipe["mask"] = mask
+        return (pipe,)
+
+
+class AVParametersPipeToCheckpointModels:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "pipe": ("PIPE",),
+            },
+        }
+
+    RETURN_TYPES = (
+        "PIPE",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+    )
+    RETURN_NAMES = (
+        "pipe",
+        "ckpt_name",
+        "secondary_ckpt_name",
+        "vae_name",
+        "upscaler_name",
+        "secondary_upscaler_name",
+        "lora_1_name",
+        "lora_2_name",
+        "lora_3_name",
+    )
+    CATEGORY = "Art Venture"
+    FUNCTION = "parameter_pipe_to_checkpoint_models"
+
+    def parameter_pipe_to_checkpoint_models(self, pipe: Dict = {}):
+        ckpt_name = pipe.get("ckpt_name", None)
+        secondary_ckpt_name = pipe.get("secondary_ckpt_name", None)
+        vae_name = pipe.get("vae_name", None)
+        upscaler_name = pipe.get("upscaler_name", None)
+        secondary_upscaler_name = pipe.get("secondary_upscaler_name", None)
+        lora_1_name = pipe.get("lora_1_name", None)
+        lora_2_name = pipe.get("lora_2_name", None)
+        lora_3_name = pipe.get("lora_3_name", None)
+
+        return (
+            pipe,
+            ckpt_name,
+            secondary_ckpt_name,
+            vae_name,
+            upscaler_name,
+            secondary_upscaler_name,
+            lora_1_name,
+            lora_2_name,
+            lora_3_name,
+        )
+
+
+class AVParametersPipeToPrompts:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "pipe": ("PIPE",),
+            },
+        }
+
+    RETURN_TYPES = (
+        "PIPE",
+        "STRING",
+        "STRING",
+        "IMAGE",
+        "MASK",
+    )
+    RETURN_NAMES = (
+        "pipe",
+        "positive",
+        "negative",
+        "image",
+        "mask",
+    )
+    CATEGORY = "Art Venture"
+    FUNCTION = "parameter_pipe_to_prompt"
+
+    def parameter_pipe_to_prompt(self, pipe: Dict = {}):
+        positive = pipe.get("positive", None)
+        negative = pipe.get("negative", None)
+        image = pipe.get("image", None)
+        mask = pipe.get("mask", None)
+
+        return (
+            pipe,
+            positive,
+            negative,
+            image,
+            mask,
+        )
+
+
 NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "AV_UploadImage": AVOutputUploadImage,
+    "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
+    "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
+    "AV_ParametersPipeToCheckpointModels": AVParametersPipeToCheckpointModels,
+    "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
     "AV_UploadImage": "Upload to Art Venture",
+    "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
+    "AV_PromptsToParametersPipe": "Prompts to Pipe",
+    "AV_ParametersPipeToCheckpointModels": "Pipe to Checkpoint Models",
+    "AV_ParametersPipeToPrompts": "Pipe to Prompts",
 }
