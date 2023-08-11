@@ -227,14 +227,14 @@ class AVParametersPipeToCheckpointModels:
 
     RETURN_TYPES = (
         "PIPE",
-        "STRING",
-        "STRING",
-        "STRING",
-        "STRING",
-        "STRING",
-        "STRING",
-        "STRING",
-        "STRING",
+        "CHECKPOINT_NAME",
+        "CHECKPOINT_NAME",
+        "VAE_NAME",
+        "UPSCALER_NAME",
+        "UPSCALER_NAME",
+        "LORA_NAME",
+        "LORA_NAME",
+        "LORA_NAME",
     )
     RETURN_NAMES = (
         "pipe",
