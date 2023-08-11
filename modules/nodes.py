@@ -133,43 +133,57 @@ class AVCheckpointModelsToParametersPipe:
     @classmethod
     def INPUT_TYPES(s):
         return {
+            "required": {
+                "ckpt_name": (
+                    folder_paths.get_filename_list("checkpoints"),
+                ),
+            },
             "optional": {
                 "pipe": ("PIPE",),
-                "ckpt_name": ("STRING", {"multiline": False}),
-                "secondary_ckpt_name": ("STRING", {"multiline": False}),
-                "vae_name": ("STRING", {"multiline": False}),
-                "upscaler_name": ("STRING", {"multiline": False}),
-                "secondary_upscaler_name": ("STRING", {"multiline": False}),
-                "lora_1_name": ("STRING", {"multiline": False}),
-                "lora_2_name": ("STRING", {"multiline": False}),
-                "lora_3_name": ("STRING", {"multiline": False}),
+                "secondary_ckpt_name": (
+                    ["None"] + folder_paths.get_filename_list("checkpoints"),
+                ),
+                "vae_name": (["None"] + folder_paths.get_filename_list("vae"),),
+                "upscaler_name": (
+                    ["None"] + folder_paths.get_filename_list("upscale_models"),
+                ),
+                "secondary_upscaler_name": (
+                    ["None"] + folder_paths.get_filename_list("upscale_models"),
+                ),
+                "lora_1_name": (["None"] + folder_paths.get_filename_list("loras"),),
+                "lora_2_name": (["None"] + folder_paths.get_filename_list("loras"),),
+                "lora_3_name": (["None"] + folder_paths.get_filename_list("loras"),),
             },
         }
 
     RETURN_TYPES = ("PIPE",)
-    CATEGORY = "Art Venture"
+    CATEGORY = "Art Venture/Parameters"
     FUNCTION = "checkpoint_models_to_parameter_pipe"
 
     def checkpoint_models_to_parameter_pipe(
         self,
+        ckpt_name,
         pipe: Dict = {},
-        ckpt_name=None,
-        secondary_ckpt_name=None,
-        vae_name=None,
-        upscaler_name=None,
-        secondary_upscaler_name=None,
-        lora_1_name=None,
-        lora_2_name=None,
-        lora_3_name=None,
+        secondary_ckpt_name="None",
+        vae_name="None",
+        upscaler_name="None",
+        secondary_upscaler_name="None",
+        lora_1_name="None",
+        lora_2_name="None",
+        lora_3_name="None",
     ):
-        pipe["ckpt_name"] = ckpt_name
-        pipe["secondary_ckpt_name"] = secondary_ckpt_name
-        pipe["vae_name"] = vae_name
-        pipe["upscaler_name"] = upscaler_name
-        pipe["secondary_upscaler_name"] = secondary_upscaler_name
-        pipe["lora_1_name"] = lora_1_name
-        pipe["lora_2_name"] = lora_2_name
-        pipe["lora_3_name"] = lora_3_name
+        pipe["ckpt_name"] = ckpt_name if ckpt_name != "None" else None
+        pipe["secondary_ckpt_name"] = (
+            secondary_ckpt_name if secondary_ckpt_name != "None" else None
+        )
+        pipe["vae_name"] = vae_name if vae_name != "None" else None
+        pipe["upscaler_name"] = upscaler_name if upscaler_name != "None" else None
+        pipe["secondary_upscaler_name"] = (
+            secondary_upscaler_name if secondary_upscaler_name != "None" else None
+        )
+        pipe["lora_1_name"] = lora_1_name if lora_1_name != "None" else None
+        pipe["lora_2_name"] = lora_2_name if lora_2_name != "None" else None
+        pipe["lora_3_name"] = lora_3_name if lora_3_name != "None" else None
         return (pipe,)
 
 
@@ -187,7 +201,7 @@ class AVPromptsToParametersPipe:
         }
 
     RETURN_TYPES = ("PIPE",)
-    CATEGORY = "Art Venture"
+    CATEGORY = "Art Venture/Parameters"
     FUNCTION = "prompt_to_parameter_pipe"
 
     def prompt_to_parameter_pipe(
@@ -204,7 +218,7 @@ class AVParametersPipeToCheckpointModels:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "optional": {
+            "required": {
                 "pipe": ("PIPE",),
             },
         }
@@ -231,7 +245,7 @@ class AVParametersPipeToCheckpointModels:
         "lora_2_name",
         "lora_3_name",
     )
-    CATEGORY = "Art Venture"
+    CATEGORY = "Art Venture/Parameters"
     FUNCTION = "parameter_pipe_to_checkpoint_models"
 
     def parameter_pipe_to_checkpoint_models(self, pipe: Dict = {}):
@@ -261,7 +275,7 @@ class AVParametersPipeToPrompts:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "optional": {
+            "required": {
                 "pipe": ("PIPE",),
             },
         }
@@ -280,7 +294,7 @@ class AVParametersPipeToPrompts:
         "image",
         "mask",
     )
-    CATEGORY = "Art Venture"
+    CATEGORY = "Art Venture/Parameters"
     FUNCTION = "parameter_pipe_to_prompt"
 
     def parameter_pipe_to_prompt(self, pipe: Dict = {}):
