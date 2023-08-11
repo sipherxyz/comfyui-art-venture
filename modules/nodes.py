@@ -191,10 +191,12 @@ class AVPromptsToParametersPipe:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "optional": {
-                "pipe": ("PIPE",),
+            "required": {
                 "positive": ("STRING", {"multiline": True, "default": "Positive"}),
                 "negative": ("STRING", {"multiline": True, "default": "Negative"}),
+            },
+            "optional": {
+                "pipe": ("PIPE",),
                 "image": ("IMAGE",),
                 "mask": ("MASK",),
             },
@@ -205,7 +207,7 @@ class AVPromptsToParametersPipe:
     FUNCTION = "prompt_to_parameter_pipe"
 
     def prompt_to_parameter_pipe(
-        self, pipe: Dict = {}, positive=None, negative=None, image=None, mask=None
+        self, positive, negative, pipe: Dict = {}, image=None, mask=None
     ):
         pipe["positive"] = positive
         pipe["negative"] = negative
