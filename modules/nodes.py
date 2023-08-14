@@ -28,7 +28,7 @@ class UtilLoadImageFromUrl:
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
-    CATEGORY = "image"
+    CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image_from_url"
 
     def load_image_from_url(self, url: str):
@@ -71,6 +71,42 @@ class UtilLoadImageFromUrl:
             mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
         return {"ui": {"images": [preview]}, "result": (image, mask)}
+
+
+class UtilStringToInt:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {"string": ("STRING", {"default": "0"})},
+        }
+
+    RETURN_TYPES = ("INT",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "string_to_int"
+
+    def string_to_int(self, string: str):
+        return (int(string),)
+
+
+class UtilImageMuxer:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image_1": ("IMAGE",),
+                "image_2": ("IMAGE",),
+                "input_selector": ("INT", {"default": 0}),
+            },
+            "optional": {"image_3": ("IMAGE",), "image_4": ("IMAGE",)},
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_muxer"
+
+    def image_muxer(self, image_1, image_2, input_selector, image_3=None, image_4=None):
+        images = [image_1, image_2, image_3, image_4]
+        return (images[input_selector],)
 
 
 class AVOutputUploadImage:
@@ -134,9 +170,7 @@ class AVCheckpointModelsToParametersPipe:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "ckpt_name": (
-                    folder_paths.get_filename_list("checkpoints"),
-                ),
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
             },
             "optional": {
                 "pipe": ("PIPE",),
@@ -316,6 +350,8 @@ class AVParametersPipeToPrompts:
 
 NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
+    "StringToInt": UtilStringToInt,
+    "ImageMuxer": UtilImageMuxer,
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
@@ -324,6 +360,8 @@ NODE_CLASS_MAPPINGS = {
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
+    "StringToInt": "String to Int",
+    "ImageMuxer": "Image Muxer",
     "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
