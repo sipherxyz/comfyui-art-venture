@@ -14,6 +14,7 @@ from .logger import logger
 from .utils import upload_to_av
 
 import folder_paths
+import comfy.sd
 
 
 class UtilLoadImageFromUrl:
@@ -107,6 +108,40 @@ class UtilImageMuxer:
     def image_muxer(self, image_1, image_2, input_selector, image_3=None, image_4=None):
         images = [image_1, image_2, image_3, image_4]
         return (images[input_selector],)
+
+
+class AVControlNetSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "control_net_name": (folder_paths.get_filename_list("controlnet"),)
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "select_controlnet"
+
+    CATEGORY = "Art Venture/Loaders"
+
+    def select_controlnet(self, control_net_name):
+        return (control_net_name,)
+
+
+class AVControlNetLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"control_net_name": ("STRING", {"multiline": False})}}
+
+    RETURN_TYPES = ("CONTROL_NET",)
+    FUNCTION = "load_controlnet"
+
+    CATEGORY = "Art Venture/Loaders"
+
+    def load_controlnet(self, control_net_name):
+        controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
+        controlnet = comfy.sd.load_controlnet(controlnet_path)
+        return (controlnet,)
 
 
 class AVOutputUploadImage:
@@ -357,6 +392,8 @@ NODE_CLASS_MAPPINGS = {
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
     "AV_ParametersPipeToCheckpointModels": AVParametersPipeToCheckpointModels,
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
+    "AV_ControlNetSelector": AVControlNetSelector,
+    "AV_ControlNetLoader": AVControlNetLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -367,4 +404,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
     "AV_ParametersPipeToCheckpointModels": "Pipe to Checkpoint Models",
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
+    "AV_ControlNetSelector": "ControlNet Selector",
+    "AV_ControlNetLoader": "ControlNet Loader",
 }
