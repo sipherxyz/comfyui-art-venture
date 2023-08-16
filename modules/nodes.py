@@ -26,13 +26,16 @@ class UtilLoadImageFromUrl:
     def INPUT_TYPES(s):
         return {
             "required": {"url": ("STRING", {"default": ""})},
+            "optinal": {
+                "keep_alpha_channel": ("BOOL", {"default": False}),
+            }
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image_from_url"
 
-    def load_image_from_url(self, url: str):
+    def load_image_from_url(self, url: str, keep_alpha_channel = False):
         if url.startswith("data:image/"):
             i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
         else:
@@ -43,7 +46,10 @@ class UtilLoadImageFromUrl:
             i = Image.open(io.BytesIO(response.content))
 
         i = ImageOps.exif_transpose(i)
-        image = i.convert("RGB")
+        if not keep_alpha_channel:
+            image = i.convert("RGB")
+        else:
+            image = i
 
         # save image to temp folder
         (
