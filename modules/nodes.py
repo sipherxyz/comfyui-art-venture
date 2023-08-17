@@ -25,17 +25,22 @@ class UtilLoadImageFromUrl:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {"url": ("STRING", {"default": ""})},
-            "optinal": {
-                "keep_alpha_channel": ("BOOL", {"default": False}),
-            }
+            "required": {
+                "url": ("STRING", {"default": ""}),
+            },
+            "optional": {
+                "keep_alpha_channel": (
+                    "BOOLEAN",
+                    {"default": False, "label_on": "enabled", "label_off": "disabled"},
+                ),
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image_from_url"
 
-    def load_image_from_url(self, url: str, keep_alpha_channel = False):
+    def load_image_from_url(self, url: str, keep_alpha_channel=False):
         if url.startswith("data:image/"):
             i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
         else:
