@@ -54,7 +54,14 @@ class UtilLoadImageFromUrl:
         if not keep_alpha_channel:
             image = i.convert("RGB")
         else:
-            image = i
+            if i.mode != "RGBA":
+                i = i.convert("RGBA")
+            
+            # recreate image to fix weird RGB image
+            alpha = i.split()[-1]
+            image = Image.new("RGB", i.size, (0,0,0))
+            image.paste(i, mask=alpha)
+            image.putalpha(alpha)
 
         # save image to temp folder
         (
