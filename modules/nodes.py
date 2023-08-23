@@ -56,10 +56,10 @@ class UtilLoadImageFromUrl:
         else:
             if i.mode != "RGBA":
                 i = i.convert("RGBA")
-            
+
             # recreate image to fix weird RGB image
             alpha = i.split()[-1]
-            image = Image.new("RGB", i.size, (0,0,0))
+            image = Image.new("RGB", i.size, (0, 0, 0))
             image.paste(i, mask=alpha)
             image.putalpha(alpha)
 
@@ -126,6 +126,69 @@ class UtilImageMuxer:
     def image_muxer(self, image_1, image_2, input_selector, image_3=None, image_4=None):
         images = [image_1, image_2, image_3, image_4]
         return (images[input_selector],)
+
+
+class UtilSDXLAspectRatioSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "aspect_ratio": (
+                    [
+                        "1:1",
+                        "2:3",
+                        "3:4",
+                        "5:8",
+                        "9:16",
+                        "9:19",
+                        "9:21",
+                        "3:2",
+                        "4:3",
+                        "8:5",
+                        "16:9",
+                        "19:9",
+                        "21:9",
+                    ],
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "INT", "INT")
+    RETURN_NAMES = ("ratio", "width", "height")
+    FUNCTION = "get_aspect_ratio"
+    CATEGORY = "Art Venture/Utils"
+
+    def get_aspect_ratio(self, aspect_ratio):
+        width, height = 1024, 1024
+
+        if aspect_ratio == "1:1":
+            width, height = 1024, 1024
+        elif aspect_ratio == "2:3":
+            width, height = 832, 1216
+        elif aspect_ratio == "3:4":
+            width, height = 896, 1152
+        elif aspect_ratio == "5:8":
+            width, height = 768, 1216
+        elif aspect_ratio == "9:16":
+            width, height = 768, 1344
+        elif aspect_ratio == "9:19":
+            width, height = 704, 1472
+        elif aspect_ratio == "9:21":
+            width, height = 640, 1536
+        elif aspect_ratio == "3:2":
+            width, height = 1216, 832
+        elif aspect_ratio == "4:3":
+            width, height = 1152, 896
+        elif aspect_ratio == "8:5":
+            width, height = 1216, 768
+        elif aspect_ratio == "16:9":
+            width, height = 1344, 768
+        elif aspect_ratio == "19:9":
+            width, height = 1472, 704
+        elif aspect_ratio == "21:9":
+            width, height = 1536, 640
+
+        return (aspect_ratio, width, height)
 
 
 class AVControlNetSelector:
@@ -405,6 +468,7 @@ NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "StringToInt": UtilStringToInt,
     "ImageMuxer": UtilImageMuxer,
+    "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
@@ -417,6 +481,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
     "StringToInt": "String to Int",
     "ImageMuxer": "Image Muxer",
+    "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
