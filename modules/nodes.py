@@ -4,7 +4,7 @@ import json
 import torch
 import base64
 import requests
-from typing import Dict
+from typing import Dict, Tuple
 
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
@@ -193,6 +193,95 @@ class UtilSDXLAspectRatioSelector:
             width, height = 1536, 640
 
         return (aspect_ratio, width, height)
+
+
+class UtilDependenciesEdit:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "dependencies": ("DEPENDENCIES",),
+            },
+            "optional": {
+                "ckpt_name": (
+                    [
+                        "Original",
+                    ]
+                    + folder_paths.get_filename_list("checkpoints"),
+                ),
+                "vae_name": (
+                    ["Original", "Baked VAE"] + folder_paths.get_filename_list("vae"),
+                ),
+                "clip": ("CLIP",),
+                "clip_skip": (
+                    "INT",
+                    {"default": 0, "min": -24, "max": 0, "step": 1},
+                ),
+                "positive": ("STRING", {"default": "Original", "multiline": True}),
+                "negative": ("STRING", {"default": "Original", "multiline": True}),
+                "lora_stack": ("LORA_STACK",),
+                "cnet_stack": ("CONTROL_NET_STACK",),
+            },
+        }
+
+    RETURN_TYPES = ("DEPENDENCIES",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "edit_dependencies"
+
+    def edit_dependencies(
+        self,
+        dependencies: Tuple,
+        vae_name="Original",
+        ckpt_name="Original",
+        clip=None,
+        clip_skip=0,
+        positive="Original",
+        negative="Original",
+        lora_stack=None,
+        cnet_stack=None,
+    ):
+        (
+            _vae_name,
+            _ckpt_name,
+            _clip,
+            _clip_skip,
+            _positive_prompt,
+            _negative_prompt,
+            _lora_stack,
+            _cnet_stack,
+        ) = dependencies
+
+        if vae_name != "Original":
+            _vae_name = vae_name
+        if ckpt_name != "Original":
+            _ckpt_name = ckpt_name
+        if clip is not None:
+            _clip = clip
+        if clip_skip < 0:
+            _clip_skip = clip_skip
+        if positive != "Original":
+            _positive_prompt = positive
+        if negative != "Original":
+            _negative_prompt = negative
+        if lora_stack is not None:
+            _lora_stack = lora_stack
+        if cnet_stack is not None:
+            _cnet_stack = cnet_stack
+
+        dependencies = (
+            _vae_name,
+            _ckpt_name,
+            _clip,
+            _clip_skip,
+            _positive_prompt,
+            _negative_prompt,
+            _lora_stack,
+            _cnet_stack,
+        )
+
+        print("Dependencies:", dependencies)
+
+        return (dependencies,)
 
 
 class AVControlNetSelector:
@@ -472,6 +561,7 @@ NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "StringToInt": UtilStringToInt,
     "ImageMuxer": UtilImageMuxer,
+    "DependenciesEdit": UtilDependenciesEdit,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
@@ -485,6 +575,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
     "StringToInt": "String to Int",
     "ImageMuxer": "Image Muxer",
+    "DependenciesEdit": "Dependencies Edit",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
