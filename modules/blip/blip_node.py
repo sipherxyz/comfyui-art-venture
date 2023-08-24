@@ -10,6 +10,7 @@ import folder_paths
 from comfy.model_management import text_encoder_device, soft_empty_cache
 
 from ..model_downloader import load_models
+from ..utils import is_junction
 
 blip = None
 blip_size = 384
@@ -84,8 +85,8 @@ def load_blip():
     global blip, blip_current_device
     if blip is None:
         blip_dir = os.path.join(folder_paths.models_dir, "blip")
-        if not os.path.exists(blip_dir):
-            os.mkdir(blip_dir)
+        if not os.path.exists(blip_dir) and not is_junction(blip_dir):
+            os.makedirs(blip_dir, exist_ok=True)
 
         files = load_models(
             model_path=blip_dir,

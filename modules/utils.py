@@ -149,3 +149,14 @@ def set_dict_attribute(dict_inst: dict, name_string: str, value):
         current_dict[name][idx] = value
     else:
         current_dict[name] = value
+
+
+def is_junction(src: str) -> bool:
+    import subprocess
+
+    child = subprocess.Popen(
+        'fsutil reparsepoint query "{}"'.format(src), stdout=subprocess.PIPE
+    )
+    streamdata = child.communicate()[0]
+    rc = child.returncode
+    return rc == 0
