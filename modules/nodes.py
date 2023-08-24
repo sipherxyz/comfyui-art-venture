@@ -12,6 +12,10 @@ import numpy as np
 
 from .logger import logger
 from .utils import upload_to_av
+from .sdxl_prompt_styler import (
+    NODE_CLASS_MAPPINGS as SDXL_STYLER_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as SDXL_STYLER_NODE_DISPLAY_NAME_MAPPINGS,
+)
 
 import folder_paths
 import comfy.sd
@@ -490,3 +494,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetSelector": "ControlNet Selector",
     "AV_ControlNetLoader": "ControlNet Loader",
 }
+
+
+NODE_CLASS_MAPPINGS.update(SDXL_STYLER_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(SDXL_STYLER_NODE_DISPLAY_NAME_MAPPINGS)
