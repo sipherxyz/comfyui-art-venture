@@ -129,14 +129,17 @@ class SDXLPromptStyler:
     @classmethod
     def INPUT_TYPES(self):
         current_directory = os.path.dirname(os.path.realpath(__file__))
-        self.json_data, styles = load_styles_from_directory(current_directory)
+        self.json_data, self.styles = load_styles_from_directory(current_directory)
 
         return {
             "required": {
                 "text_positive": ("STRING", {"default": "", "multiline": True}),
                 "text_negative": ("STRING", {"default": "", "multiline": True}),
-                "style": ((styles),),
+                "style": ((self.styles),),
                 "log_prompt": (["No", "Yes"], {"default": "No"}),
+            },
+            "optional": {
+                "style_name": ("STRING", {"multiline": False}),
             },
         }
 
@@ -151,7 +154,16 @@ class SDXLPromptStyler:
     FUNCTION = "prompt_styler"
     CATEGORY = "utils"
 
-    def prompt_styler(self, text_positive, text_negative, style, log_prompt):
+    def prompt_styler(
+        self, text_positive, text_negative, style, log_prompt, style_name=None
+    ):
+        if style_name and style_name not in self.styles:
+            print(f"Warning: Style '{style_name}' not found. Using '{style}' instead.")
+            style_name = None
+
+        if style_name:
+            style = style_name
+
         # Process and combine prompts in templates
         # The function replaces the positive prompt placeholder in the template,
         # and combines the negative prompt with the template's negative prompt, if they exist.
