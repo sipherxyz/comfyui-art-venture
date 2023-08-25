@@ -24,6 +24,8 @@ from .blip import (
 import folder_paths
 import comfy.sd
 
+MAX_RESOLUTION = 4096
+
 
 class UtilLoadImageFromUrl:
     def __init__(self) -> None:
@@ -288,6 +290,91 @@ class UtilDependenciesEdit:
         return (dependencies,)
 
 
+class UtilImageScaleDown:
+    crop_methods = ["disabled", "center"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "width": (
+                    "INT",
+                    {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1},
+                ),
+                "crop": (s.crop_methods,),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_scale_down"
+
+    def image_scale_down(self, images, width, height, crop):
+        if crop == "center":
+            old_width = images.shape[3]
+            old_height = images.shape[2]
+            old_aspect = old_width / old_height
+            new_aspect = width / height
+            x = 0
+            y = 0
+            if old_aspect > new_aspect:
+                x = round((old_width - old_width * (new_aspect / old_aspect)) / 2)
+            elif old_aspect < new_aspect:
+                y = round((old_height - old_height * (old_aspect / new_aspect)) / 2)
+            s = images[:, :, y : old_height - y, x : old_width - x]
+        else:
+            s = images
+
+        pil_images = []
+        for idx, image in enumerate(images):
+            i = 255.0 * image.cpu().numpy()
+            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            img = img.convert("RGB")
+            img = img.resize((width, height), Image.LANCZOS)
+            pil_images.append(img)
+
+        results = torch.cat(
+            [
+                torch.from_numpy(np.array(img).astype(np.float32) / 255.0)[None,]
+                for img in pil_images
+            ],
+            dim=0,
+        )
+
+        return (results,)
+
+
+class UtilImageScaleDownBy(UtilImageScaleDown):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "scale_by": (
+                    "FLOAT",
+                    {"default": 0.5, "min": 0.01, "max": 1.0, "step": 0.01},
+                ),
+            }
+        }
+    
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_scale_down_by"
+
+    def image_scale_down_by(self, images, scale_by):
+        print("images", images.shape)
+        width = images.shape[2]
+        height = images.shape[1]
+        new_width = int(width * scale_by)
+        new_height = int(height * scale_by)
+        return self.image_scale_down(images, new_width, new_height, "center")
+
+
 class AVControlNetSelector:
     @classmethod
     def INPUT_TYPES(s):
@@ -361,7 +448,6 @@ class AVOutputUploadImage:
                     metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
             buffer = io.BytesIO()
-            img.save(buffer, format="PNG", pnginfo=metadata, compress_level=4)
             buffer.seek(0)
             files.append(
                 (
@@ -565,6 +651,8 @@ NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "StringToInt": UtilStringToInt,
     "ImageMuxer": UtilImageMuxer,
+    "ImageScaleDown": UtilImageScaleDown,
+    "ImageScaleDownBy": UtilImageScaleDownBy,
     "DependenciesEdit": UtilDependenciesEdit,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "AV_UploadImage": AVOutputUploadImage,
@@ -579,6 +667,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
     "StringToInt": "String to Int",
     "ImageMuxer": "Image Muxer",
+    "ImageScaleDown": "Image Scale Down",
+    "ImageScaleDownBy": "Image Scale Down By",
     "DependenciesEdit": "Dependencies Edit",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "AV_UploadImage": "Upload to Art Venture",
