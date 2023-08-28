@@ -361,7 +361,7 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
                 ),
             }
         }
-    
+
     RETURN_TYPES = ("IMAGE",)
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "image_scale_down_by"
@@ -407,6 +407,45 @@ class AVControlNetLoader:
         controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
         controlnet = comfy.sd.load_controlnet(controlnet_path)
         return (controlnet,)
+
+
+class AVCheckpointLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+            },
+            "optional": {
+                "ckpt_name_override": (
+                    "STRING",
+                    {"multiline": False, "default": "None"},
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
+    FUNCTION = "load_checkpoint"
+
+    CATEGORY = "loaders"
+
+    def load_checkpoint(self, ckpt_name, ckpt_name_override="None"):
+        if ckpt_name_override != "None":
+            if ckpt_name_override not in folder_paths.get_filename_list("checkpoints"):
+                raise ValueError(
+                    f"Checkpoint override '{ckpt_name_override}' not found. Will load {ckpt_name}."
+                )
+            else:
+                ckpt_name = ckpt_name_override
+
+        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        out = comfy.sd.load_checkpoint_guess_config(
+            ckpt_path,
+            output_vae=True,
+            output_clip=True,
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+        )
+        return out
 
 
 class AVOutputUploadImage:
@@ -662,6 +701,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
     "AV_ControlNetSelector": AVControlNetSelector,
     "AV_ControlNetLoader": AVControlNetLoader,
+    "AV_CheckpointLoader": AVCheckpointLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -678,6 +718,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
     "AV_ControlNetSelector": "ControlNet Selector",
     "AV_ControlNetLoader": "ControlNet Loader",
+    "AV_CheckpointLoader": "Checkpoint Loader",
 }
 
 
