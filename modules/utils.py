@@ -1,3 +1,4 @@
+import os
 import time
 import requests
 import traceback
@@ -160,3 +161,18 @@ def is_junction(src: str) -> bool:
     streamdata = child.communicate()[0]
     rc = child.returncode
     return rc == 0
+
+
+def load_module(module_path):
+    import importlib.util
+
+    module_name = os.path.basename(module_path)
+    if os.path.isfile(module_path):
+            module_spec = importlib.util.spec_from_file_location(module_name, module_path)
+    else:
+        module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(module_path, "__init__.py"))
+    
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+
+    return module

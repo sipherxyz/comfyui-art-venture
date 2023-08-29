@@ -10,6 +10,9 @@ from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 import numpy as np
 
+import folder_paths
+import comfy.sd
+
 from .logger import logger
 from .utils import upload_to_av
 from .sdxl_prompt_styler import (
@@ -20,9 +23,10 @@ from .blip import (
     NODE_CLASS_MAPPINGS as BLIP_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as BLIP_NODE_DISPLAY_NAME_MAPPINGS,
 )
-
-import folder_paths
-import comfy.sd
+from .fooocus import (
+    NODE_CLASS_MAPPINGS as FOOOCUS_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as FOOOCUS_NODE_DISPLAY_NAME_MAPPINGS,
+)
 
 MAX_RESOLUTION = 4096
 
@@ -727,3 +731,6 @@ NODE_DISPLAY_NAME_MAPPINGS.update(SDXL_STYLER_NODE_DISPLAY_NAME_MAPPINGS)
 
 NODE_CLASS_MAPPINGS.update(BLIP_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(BLIP_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(FOOOCUS_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(FOOOCUS_NODE_DISPLAY_NAME_MAPPINGS)
