@@ -320,8 +320,8 @@ class UtilImageScaleDown:
 
     def image_scale_down(self, images, width, height, crop):
         if crop == "center":
-            old_width = images.shape[3]
-            old_height = images.shape[2]
+            old_width = images.shape[2]
+            old_height = images.shape[1]
             old_aspect = old_width / old_height
             new_aspect = width / height
             x = 0
@@ -330,12 +330,12 @@ class UtilImageScaleDown:
                 x = round((old_width - old_width * (new_aspect / old_aspect)) / 2)
             elif old_aspect < new_aspect:
                 y = round((old_height - old_height * (old_aspect / new_aspect)) / 2)
-            s = images[:, :, y : old_height - y, x : old_width - x]
+            s = images[:, y : old_height - y, x : old_width - x, :]
         else:
             s = images
 
         pil_images = []
-        for idx, image in enumerate(images):
+        for idx, image in enumerate(s):
             i = 255.0 * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             img = img.convert("RGB")
