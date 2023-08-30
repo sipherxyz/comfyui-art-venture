@@ -445,6 +445,10 @@ def unet_forward_patched(
     alpha *= 0.001 * sharpness
     degraded_x0 = bilateral_blur(x0) * alpha + x0 * (1.0 - alpha)
 
+    # FIX: uc_mask is not always the same size as x0
+    if uc_mask.shape[0] < x0.shape[0]:
+        uc_mask = uc_mask.repeat(int(x0.shape[0] / uc_mask.shape[0]), 1, 1, 1)
+
     x0 = x0 * uc_mask + degraded_x0 * (1.0 - uc_mask)
 
     return x0
