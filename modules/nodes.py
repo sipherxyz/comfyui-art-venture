@@ -12,6 +12,7 @@ import numpy as np
 
 import folder_paths
 import comfy.sd
+from nodes import LoraLoader, VAELoader, ControlNetLoader
 
 from .logger import logger
 from .utils import upload_to_av
@@ -29,7 +30,7 @@ from .fooocus import (
 )
 from .postprocessing import (
     NODE_CLASS_MAPPINGS as PP_NODE_CLASS_MAPPINGS,
-    NODE_DISPLAY_NAME_MAPPINGS as PP_NODE_DISPLAY_NAME_MAPPINGS
+    NODE_DISPLAY_NAME_MAPPINGS as PP_NODE_DISPLAY_NAME_MAPPINGS,
 )
 
 
@@ -384,77 +385,67 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
         return self.image_scale_down(images, new_width, new_height, "center")
 
 
-class AVControlNetSelector:
+class AVControlNetLoader(ControlNetLoader):
     @classmethod
     def INPUT_TYPES(s):
-        return {
-            "required": {
-                "control_net_name": (folder_paths.get_filename_list("controlnet"),)
-            }
-        }
-
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "select_controlnet"
+        inputs = ControlNetLoader.INPUT_TYPES()
+        inputs["optional"] = {"control_net_override": ("STRING", {"default": "None"})}
+        return inputs
 
     CATEGORY = "Art Venture/Loaders"
 
-    def select_controlnet(self, control_net_name):
-        return (control_net_name,)
-
-
-class AVControlNetLoader:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {"control_net_name": ("STRING", {"multiline": False})}}
-
-    RETURN_TYPES = ("CONTROL_NET",)
-    FUNCTION = "load_controlnet"
-
-    CATEGORY = "Art Venture/Loaders"
-
-    def load_controlnet(self, control_net_name):
-        controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
-        controlnet = comfy.sd.load_controlnet(controlnet_path)
-        return (controlnet,)
-
-
-class AVCheckpointLoader:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
-            },
-            "optional": {
-                "ckpt_name_override": (
-                    "STRING",
-                    {"multiline": False, "default": "None"},
-                ),
-            },
-        }
-
-    RETURN_TYPES = ("MODEL", "CLIP", "VAE")
-    FUNCTION = "load_checkpoint"
-
-    CATEGORY = "loaders"
-
-    def load_checkpoint(self, ckpt_name, ckpt_name_override="None"):
-        if ckpt_name_override != "None":
-            if ckpt_name_override not in folder_paths.get_filename_list("checkpoints"):
-                raise ValueError(
-                    f"Checkpoint override '{ckpt_name_override}' not found. Will load {ckpt_name}."
+    def load_controlnet(self, control_net_name, control_net_override="None"):
+        if control_net_override != "None":
+            if control_net_override not in folder_paths.get_filename_list("controlnet"):
+                print(
+                    f"Warning: Not found ControlNet model {control_net_override}. Use {control_net_name} instead."
                 )
             else:
-                ckpt_name = ckpt_name_override
+                control_net_name = control_net_override
 
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
-        out = comfy.sd.load_checkpoint_guess_config(
-            ckpt_path,
-            output_vae=True,
-            output_clip=True,
-            embedding_directory=folder_paths.get_folder_paths("embeddings"),
-        )
-        return out
+        return super().load_controlnet(control_net_name)
+
+
+class AVVAELoader(VAELoader):
+    @classmethod
+    def INPUT_TYPES(s):
+        inputs = VAELoader.INPUT_TYPES()
+        inputs["optional"] = {"vae_override": ("STRING", {"default": "None"})}
+        return inputs
+
+    CATEGORY = "Art Venture/Loaders"
+
+    def load_vae(self, vae_name, vae_override="None"):
+        if vae_override != "None":
+            if vae_override not in folder_paths.get_filename_list("vae"):
+                print(
+                    f"Warning: Not found VAE model {vae_override}. Use {vae_name} instead."
+                )
+            else:
+                vae_name = vae_override
+
+        return super().load_vae(vae_name)
+
+
+class AVLoraLoader(LoraLoader):
+    @classmethod
+    def INPUT_TYPES(s):
+        inputs = LoraLoader.INPUT_TYPES()
+        inputs["optional"] = {"lora_override": ("STRING", {"default": "None"})}
+        return inputs
+
+    CATEGORY = "Art Venture/Loaders"
+
+    def load_lora(self, lora_name, lora_override="None"):
+        if lora_override != "None":
+            if lora_override not in folder_paths.get_filename_list("loras"):
+                print(
+                    f"Warning: Not found Lora model {lora_override}. Use {lora_name} instead."
+                )
+            else:
+                lora_name = lora_override
+
+        return super().load_lora(lora_name)
 
 
 class AVOutputUploadImage:
@@ -708,9 +699,9 @@ NODE_CLASS_MAPPINGS = {
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
     "AV_ParametersPipeToCheckpointModels": AVParametersPipeToCheckpointModels,
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
-    "AV_ControlNetSelector": AVControlNetSelector,
     "AV_ControlNetLoader": AVControlNetLoader,
-    "AV_CheckpointLoader": AVCheckpointLoader,
+    "AV_VAELoader": AVVAELoader,
+    "AV_LoraLoader": AVLoraLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -725,9 +716,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
     "AV_ParametersPipeToCheckpointModels": "Pipe to Checkpoint Models",
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
-    "AV_ControlNetSelector": "ControlNet Selector",
     "AV_ControlNetLoader": "ControlNet Loader",
-    "AV_CheckpointLoader": "Checkpoint Loader",
+    "AV_VAELoader": "VAE Loader",
+    "AV_LoraLoader": "Lora Loader",
 }
 
 
