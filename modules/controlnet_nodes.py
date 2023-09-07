@@ -47,17 +47,36 @@ try:
             nodes["LineArtPreprocessor"],
             ["disable"],
         )
+        control_net_preprocessors["lineart_coarse"] = (
+            nodes["LineArtPreprocessor"],
+            ["enable"],
+        )
     if "AnimeLineArtPreprocessor" in nodes:
-        control_net_preprocessors["lineart-anime"] = (
+        control_net_preprocessors["lineart_anime"] = (
             nodes["AnimeLineArtPreprocessor"],
+            [],
+        )
+    if "Manga2Anime_LineArt_Preprocessor" in nodes:
+        control_net_preprocessors["lineart_manga"] = (
+            nodes["Manga2Anime_LineArt_Preprocessor"],
             [],
         )
     if "ScribblePreprocessor" in nodes:
         control_net_preprocessors["scribble"] = (nodes["ScribblePreprocessor"], [])
+    if "FakeScribblePreprocessor" in nodes:
+        control_net_preprocessors["scribble_hed"] = (
+            nodes["FakeScribblePreprocessor"],
+            ["enable"],
+        )
     if "HEDPreprocessor" in nodes:
-        control_net_preprocessors["hed"] = (nodes["HEDPreprocessor"], ["enable"])
+        control_net_preprocessors["hed"] = (nodes["HEDPreprocessor"], ["disable"])
+        control_net_preprocessors["hed_safe"] = (nodes["HEDPreprocessor"], ["enable"])
     if "PiDiNetPreprocessor" in nodes:
-        control_net_preprocessors["pidinet"] = (
+        control_net_preprocessors["pidi"] = (
+            nodes["PiDiNetPreprocessor"],
+            ["disable"],
+        )
+        control_net_preprocessors["pidi_safe"] = (
             nodes["PiDiNetPreprocessor"],
             ["enable"],
         )
@@ -74,22 +93,38 @@ try:
             ["enable", "enable", "enable"],
         )
     if "BAE-NormalMapPreprocessor" in nodes:
-        control_net_preprocessors["normalmap-bae"] = (
+        control_net_preprocessors["normalmap_bae"] = (
             nodes["BAE-NormalMapPreprocessor"],
             [],
         )
     if "MiDaS-NormalMapPreprocessor" in nodes:
-        control_net_preprocessors["normalmap-midas"] = (
+        control_net_preprocessors["normalmap_midas"] = (
             nodes["MiDaS-NormalMapPreprocessor"],
             [math.pi * 2.0, 0.1],
         )
     if "MiDaS-DepthMapPreprocessor" in nodes:
-        control_net_preprocessors["depth-midas"] = (
+        control_net_preprocessors["depth_midas"] = (
             nodes["MiDaS-DepthMapPreprocessor"],
             [math.pi * 2.0, 0.4],
         )
     if "Zoe-DepthMapPreprocessor" in nodes:
         control_net_preprocessors["depth"] = (nodes["Zoe-DepthMapPreprocessor"], [])
+        control_net_preprocessors["depth_zoe"] = (nodes["Zoe-DepthMapPreprocessor"], [])
+    if "OneFormer-COCO-SemSegPreprocessor" in nodes:
+        control_net_preprocessors["seg_ofcoco"] = (
+            nodes["OneFormer-COCO-SemSegPreprocessor"],
+            [],
+        )
+    if "OneFormer-ADE20K-SemSegPreprocessor" in nodes:
+        control_net_preprocessors["seg_ofade20k"] = (
+            nodes["OneFormer-ADE20K-SemSegPreprocessor"],
+            [],
+        )
+    if "UniFormer-SemSegPreprocessor" in nodes:
+        control_net_preprocessors["seg_ufade20k"] = (
+            nodes["UniFormer-SemSegPreprocessor"],
+            [],
+        )
 
 except Exception as e:
     print(e)
@@ -121,10 +156,17 @@ def apply_preprocessor(image, preprocessor):
     preprocessor_class, default_args = control_net_preprocessors[preprocessor]
     default_args: List = default_args.copy()
     default_args.insert(0, image)
-    preprocessor_args = {
-        key: default_args[i]
-        for i, key in enumerate(preprocessor_class.INPUT_TYPES()["required"].keys())
-    }
+
+    required_args = preprocessor_class.INPUT_TYPES()["required"].keys()
+    optional_args = preprocessor_class.INPUT_TYPES().get("optional", {}).keys()
+    preprocessor_args = {key: default_args[i] for i, key in enumerate(required_args)}
+    preprocessor_args.update(
+        {
+            key: default_args[i + len(required_args)]
+            for i, key in enumerate(optional_args)
+        }
+    )
+
     function_name = preprocessor_class.FUNCTION
     image = getattr(preprocessor_class(), function_name)(**preprocessor_args)[0]
 
@@ -147,6 +189,59 @@ class AVControlNetLoader(ControlNetLoader):
 
     def load_controlnet(self, control_net_name, control_net_override="None"):
         return load_controlnet(control_net_name, control_net_override)
+
+
+class AV_ControlNetPreprocessor:
+    preprocessors = list(control_net_preprocessors.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "preprocessor": (["None"] + s.preprocessors,),
+                "sd_version": (["sd15", "sdxl"],),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("IMAGE", "CNET_NAME")
+    FUNCTION = "detect_controlnet"
+    CATEGORY = "Art Venture/Loaders"
+
+    def detect_controlnet(self, image, preprocessor, sd_version):
+        image = apply_preprocessor(image, preprocessor)
+
+        controlnets = folder_paths.get_filename_list("controlnet")
+        controlnets = filter(lambda x: sd_version in x, controlnets)
+
+        control_net_name = "None"
+        if preprocessor in {"canny", "scribble", "mlsd"}:
+            control_net_name = next(
+                (c for c in controlnets if preprocessor in c), "None"
+            )
+        if preprocessor in {"scribble", "scribble_hed"}:
+            control_net_name = next((c for c in controlnets if "scribble" in c), "None")
+        if preprocessor in {"lineart", "lineart_coarse"}:
+            control_net_name = next((c for c in controlnets if "lineart." in c), "None")
+        if preprocessor in {"lineart_anime", "lineart_manga"}:
+            control_net_name = next(
+                (c for c in controlnets if "lineart_anime" in c), "None"
+            )
+        if preprocessor in {"hed", "hed_safe", "pidi", "pidi_safe"}:
+            control_net_name = next((c for c in controlnets if "softedge" in c), "None")
+        if preprocessor in {"openpose", "dwpose"}:
+            control_net_name = next((c for c in controlnets if "openpose" in c), "None")
+        if preprocessor in {"normalmap_bae", "normalmap_midas"}:
+            control_net_name = next(
+                (c for c in controlnets if "normalbae" in c), "None"
+            )
+        if preprocessor in {"depth", "depth_midas", "depth_zoe"}:
+            control_net_name = next((c for c in controlnets if "depth" in c), "None")
+        if preprocessor in {"seg_ofcoco", "seg_ofade20k", "seg_ufade20k"}:
+            control_net_name = next((c for c in controlnets if "seg" in c), "None")
+
+        return (image, control_net_name)
 
 
 class AVControlNetEfficientStacker:
@@ -245,10 +340,12 @@ NODE_CLASS_MAPPINGS = {
     "AV_ControlNetLoader": AVControlNetLoader,
     "AV_ControlNetEfficientLoader": AVControlNetEfficientLoader,
     "AV_ControlNetEfficientStacker": AVControlNetEfficientStacker,
+    "AV_ControlNetPreprocessor": AV_ControlNetPreprocessor,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetLoader": "ControlNet Loader",
     "AV_ControlNetEfficientLoader": "ControlNet Loader (Efficient)",
     "AV_ControlNetEfficientStacker": "ControlNet Stacker (Efficient)",
+    "AV_ControlNetPreprocessor": "ControlNet Preprocessor",
 }
