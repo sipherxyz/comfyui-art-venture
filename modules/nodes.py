@@ -214,6 +214,36 @@ class UtilSDXLAspectRatioSelector:
         return (aspect_ratio, width, height)
 
 
+class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "aspect_ratio": (
+                    [
+                        "1:1",
+                        "2:3",
+                        "3:4",
+                        "9:16",
+                        "3:2",
+                        "4:3",
+                        "16:9",
+                    ],
+                ),
+            }
+        }
+
+    def get_aspect_ratio(self, aspect_ratio):
+        ratio, width, height = super().get_aspect_ratio(aspect_ratio)
+
+        scale_ratio = 512 / min(width, height)
+
+        width = int(scale_ratio * width / 8) * 8
+        height = int(scale_ratio * height / 8) * 8
+
+        return (ratio, width, height)
+
+
 class UtilDependenciesEdit:
     @classmethod
     def INPUT_TYPES(s):
@@ -675,6 +705,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleDown": UtilImageScaleDown,
     "ImageScaleDownBy": UtilImageScaleDownBy,
     "DependenciesEdit": UtilDependenciesEdit,
+    "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
@@ -691,6 +722,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleDown": "Image Scale Down",
     "ImageScaleDownBy": "Image Scale Down By",
     "DependenciesEdit": "Dependencies Edit",
+    "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
