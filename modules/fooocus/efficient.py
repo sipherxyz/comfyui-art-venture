@@ -14,32 +14,32 @@ NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
 try:
-    efficieny_path = None
+    module_path = None
 
     for custom_node in custom_nodes:
         custom_node = (
             custom_node if not os.path.islink(custom_node) else os.readlink(custom_node)
         )
-        for efficiency_dir in efficieny_dir_names:
-            if efficiency_dir in os.listdir(custom_node):
-                efficieny_path = os.path.abspath(
-                    os.path.join(custom_node, efficiency_dir)
+        for module_dir in efficieny_dir_names:
+            if module_dir in os.listdir(custom_node):
+                module_path = os.path.abspath(
+                    os.path.join(custom_node, module_dir)
                 )
                 if custom_node not in sys.path:
                     sys.path.append(custom_node)
                 break
 
-    if efficieny_path is None:
+    if module_path is None:
         raise Exception("Could not find efficiency nodes")
 
-    module = load_module(efficieny_path)
-    print("Loaded efficiency nodes from", efficieny_path)
+    module = load_module(module_path)
+    print("Loaded efficiency nodes from", module_path)
 
-    efficieny_nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
+    nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
 
-    TSC_KSampler = efficieny_nodes["KSampler (Efficient)"]
-    TSC_KSamplerAdvanced = efficieny_nodes["KSampler Adv. (Efficient)"]
-    TSC_EfficientLoader = efficieny_nodes["Efficient Loader"]
+    TSC_KSampler = nodes["KSampler (Efficient)"]
+    TSC_KSamplerAdvanced = nodes["KSampler Adv. (Efficient)"]
+    TSC_EfficientLoader = nodes["Efficient Loader"]
 
     class KSamplerEfficientWithSharpness(TSC_KSampler):
         @classmethod

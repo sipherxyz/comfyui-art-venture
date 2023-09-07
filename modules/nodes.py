@@ -11,8 +11,7 @@ from PIL.PngImagePlugin import PngInfo
 import numpy as np
 
 import folder_paths
-import comfy.sd
-from nodes import LoraLoader, VAELoader, ControlNetLoader
+from nodes import LoraLoader, VAELoader
 
 from .logger import logger
 from .utils import upload_to_av
@@ -31,6 +30,10 @@ from .fooocus import (
 from .postprocessing import (
     NODE_CLASS_MAPPINGS as PP_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as PP_NODE_DISPLAY_NAME_MAPPINGS,
+)
+from .controlnet_nodes import (
+    NODE_CLASS_MAPPINGS as CONTROLNET_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as CONTROLNET_NODE_DISPLAY_NAME_MAPPINGS,
 )
 
 
@@ -385,27 +388,6 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
         return self.image_scale_down(images, new_width, new_height, "center")
 
 
-class AVControlNetLoader(ControlNetLoader):
-    @classmethod
-    def INPUT_TYPES(s):
-        inputs = ControlNetLoader.INPUT_TYPES()
-        inputs["optional"] = {"control_net_override": ("STRING", {"default": "None"})}
-        return inputs
-
-    CATEGORY = "Art Venture/Loaders"
-
-    def load_controlnet(self, control_net_name, control_net_override="None"):
-        if control_net_override != "None":
-            if control_net_override not in folder_paths.get_filename_list("controlnet"):
-                print(
-                    f"Warning: Not found ControlNet model {control_net_override}. Use {control_net_name} instead."
-                )
-            else:
-                control_net_name = control_net_override
-
-        return super().load_controlnet(control_net_name)
-
-
 class AVVAELoader(VAELoader):
     @classmethod
     def INPUT_TYPES(s):
@@ -699,7 +681,6 @@ NODE_CLASS_MAPPINGS = {
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
     "AV_ParametersPipeToCheckpointModels": AVParametersPipeToCheckpointModels,
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
-    "AV_ControlNetLoader": AVControlNetLoader,
     "AV_VAELoader": AVVAELoader,
     "AV_LoraLoader": AVLoraLoader,
 }
@@ -716,7 +697,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
     "AV_ParametersPipeToCheckpointModels": "Pipe to Checkpoint Models",
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
-    "AV_ControlNetLoader": "ControlNet Loader",
     "AV_VAELoader": "VAE Loader",
     "AV_LoraLoader": "Lora Loader",
 }
@@ -733,3 +713,6 @@ NODE_DISPLAY_NAME_MAPPINGS.update(FOOOCUS_NODE_DISPLAY_NAME_MAPPINGS)
 
 NODE_CLASS_MAPPINGS.update(PP_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(PP_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(CONTROLNET_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(CONTROLNET_NODE_DISPLAY_NAME_MAPPINGS)
