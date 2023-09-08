@@ -312,7 +312,6 @@ def sampling_function_patched(
                     },
                 ).chunk(batch_chunks)
             else:
-                print("**** c", c)
                 output = model_function(input_x, timestep_, **c).chunk(batch_chunks)
             del input_x
 
