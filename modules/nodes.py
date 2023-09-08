@@ -418,6 +418,29 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
         return self.image_scale_down(images, new_width, new_height, "center")
 
 
+class UtilSeedSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mode": (["random", "fixed"],),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "fixed_seed": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("INT",)
+    RETURN_NAMES = ("seed",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "get_seed"
+
+    def get_seed(self, mode, seed, fixed_seed):
+        return (seed if mode == "random" else fixed_seed,)
+
+
 class AVVAELoader(VAELoader):
     @classmethod
     def INPUT_TYPES(s):
@@ -707,6 +730,7 @@ NODE_CLASS_MAPPINGS = {
     "DependenciesEdit": UtilDependenciesEdit,
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
+    "SeedSelector": UtilSeedSelector,
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
@@ -724,6 +748,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DependenciesEdit": "Dependencies Edit",
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
+    "SeedSelector": "Seed Selector",
     "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
