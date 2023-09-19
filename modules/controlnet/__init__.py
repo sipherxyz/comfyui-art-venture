@@ -1,136 +1,13 @@
-import os
-import sys
-import math
-from typing import Dict, List
+from typing import List
 
 import folder_paths
-import comfy.sd
-import comfy.controlnet
-from nodes import ControlNetLoader, ControlNetApply
+from nodes import ControlNetLoader, ControlNetApply, ControlNetApplyAdvanced
 
-from .utils import load_module
-
-custom_nodes = folder_paths.get_folder_paths("custom_nodes")
-preprocessors_dir_names = ["ControlNetPreprocessors", "comfyui_controlnet_aux"]
-
-control_net_preprocessors = {}
-
-try:
-    module_path = None
-
-    for custom_node in custom_nodes:
-        custom_node = (
-            custom_node if not os.path.islink(custom_node) else os.readlink(custom_node)
-        )
-        for module_dir in preprocessors_dir_names:
-            if module_dir in os.listdir(custom_node):
-                module_path = os.path.abspath(os.path.join(custom_node, module_dir))
-                if custom_node not in sys.path:
-                    sys.path.append(custom_node)
-                break
-
-    if module_path is None:
-        raise Exception("Could not find ControlNetPreprocessors nodes")
-
-    module = load_module(module_path)
-    print("Loaded ControlNetPreprocessors nodes from", module_path)
-
-    nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
-
-    if "CannyEdgePreprocessor" in nodes:
-        control_net_preprocessors["canny"] = (
-            nodes["CannyEdgePreprocessor"],
-            [100, 200],
-        )
-    if "LineArtPreprocessor" in nodes:
-        control_net_preprocessors["lineart"] = (
-            nodes["LineArtPreprocessor"],
-            ["disable"],
-        )
-        control_net_preprocessors["lineart_coarse"] = (
-            nodes["LineArtPreprocessor"],
-            ["enable"],
-        )
-    if "AnimeLineArtPreprocessor" in nodes:
-        control_net_preprocessors["lineart_anime"] = (
-            nodes["AnimeLineArtPreprocessor"],
-            [],
-        )
-    if "Manga2Anime_LineArt_Preprocessor" in nodes:
-        control_net_preprocessors["lineart_manga"] = (
-            nodes["Manga2Anime_LineArt_Preprocessor"],
-            [],
-        )
-    if "ScribblePreprocessor" in nodes:
-        control_net_preprocessors["scribble"] = (nodes["ScribblePreprocessor"], [])
-    if "FakeScribblePreprocessor" in nodes:
-        control_net_preprocessors["scribble_hed"] = (
-            nodes["FakeScribblePreprocessor"],
-            ["enable"],
-        )
-    if "HEDPreprocessor" in nodes:
-        control_net_preprocessors["hed"] = (nodes["HEDPreprocessor"], ["disable"])
-        control_net_preprocessors["hed_safe"] = (nodes["HEDPreprocessor"], ["enable"])
-    if "PiDiNetPreprocessor" in nodes:
-        control_net_preprocessors["pidi"] = (
-            nodes["PiDiNetPreprocessor"],
-            ["disable"],
-        )
-        control_net_preprocessors["pidi_safe"] = (
-            nodes["PiDiNetPreprocessor"],
-            ["enable"],
-        )
-    if "M-LSDPreprocessor" in nodes:
-        control_net_preprocessors["mlsd"] = (nodes["M-LSDPreprocessor"], [0.1, 0.1])
-    if "OpenposePreprocessor" in nodes:
-        control_net_preprocessors["openpose"] = (
-            nodes["OpenposePreprocessor"],
-            ["enable", "enable", "enable"],
-        )
-    if "DWPreprocessor" in nodes:
-        control_net_preprocessors["dwpose"] = (
-            nodes["DWPreprocessor"],
-            ["enable", "enable", "enable"],
-        )
-    if "BAE-NormalMapPreprocessor" in nodes:
-        control_net_preprocessors["normalmap_bae"] = (
-            nodes["BAE-NormalMapPreprocessor"],
-            [],
-        )
-    if "MiDaS-NormalMapPreprocessor" in nodes:
-        control_net_preprocessors["normalmap_midas"] = (
-            nodes["MiDaS-NormalMapPreprocessor"],
-            [math.pi * 2.0, 0.1],
-        )
-    if "MiDaS-DepthMapPreprocessor" in nodes:
-        control_net_preprocessors["depth_midas"] = (
-            nodes["MiDaS-DepthMapPreprocessor"],
-            [math.pi * 2.0, 0.4],
-        )
-    if "Zoe-DepthMapPreprocessor" in nodes:
-        control_net_preprocessors["depth"] = (nodes["Zoe-DepthMapPreprocessor"], [])
-        control_net_preprocessors["depth_zoe"] = (nodes["Zoe-DepthMapPreprocessor"], [])
-    if "OneFormer-COCO-SemSegPreprocessor" in nodes:
-        control_net_preprocessors["seg_ofcoco"] = (
-            nodes["OneFormer-COCO-SemSegPreprocessor"],
-            [],
-        )
-    if "OneFormer-ADE20K-SemSegPreprocessor" in nodes:
-        control_net_preprocessors["seg_ofade20k"] = (
-            nodes["OneFormer-ADE20K-SemSegPreprocessor"],
-            [],
-        )
-    if "UniFormer-SemSegPreprocessor" in nodes:
-        control_net_preprocessors["seg_ufade20k"] = (
-            nodes["UniFormer-SemSegPreprocessor"],
-            [],
-        )
-
-except Exception as e:
-    print(e)
+from .preprocessors import control_net_preprocessors
+from .advanced import comfy_load_controlnet
 
 
-def load_controlnet(control_net_name, control_net_override="None"):
+def load_controlnet(control_net_name, control_net_override="None", timestep_keyframe = None):
     if control_net_override != "None":
         if control_net_override not in folder_paths.get_filename_list("controlnet"):
             print(
@@ -143,7 +20,7 @@ def load_controlnet(control_net_name, control_net_override="None"):
         return None
 
     controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
-    return comfy.controlnet.load_controlnet(controlnet_path)
+    return comfy_load_controlnet(controlnet_path, timestep_keyframe=timestep_keyframe)
 
 
 def apply_preprocessor(image, preprocessor):
@@ -180,15 +57,18 @@ class AVControlNetLoader(ControlNetLoader):
             "required": {
                 "control_net_name": (folder_paths.get_filename_list("controlnet"),)
             },
-            "optional": {"control_net_override": ("STRING", {"default": "None"})},
+            "optional": {
+                "control_net_override": ("STRING", {"default": "None"}),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+            },
         }
 
     RETURN_TYPES = ("CONTROL_NET",)
     FUNCTION = "load_controlnet"
     CATEGORY = "Art Venture/Loaders"
 
-    def load_controlnet(self, control_net_name, control_net_override="None"):
-        return load_controlnet(control_net_name, control_net_override)
+    def load_controlnet(self, control_net_name, control_net_override="None", timestep_keyframe=None):
+        return load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
 
 
 class AV_ControlNetPreprocessor:
@@ -265,6 +145,7 @@ class AVControlNetEfficientStacker:
             "optional": {
                 "cnet_stack": ("CONTROL_NET_STACK",),
                 "control_net_override": ("STRING", {"default": "None"}),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
             },
         }
 
@@ -281,12 +162,13 @@ class AVControlNetEfficientStacker:
         preprocessor,
         cnet_stack=None,
         control_net_override="None",
+        timestep_keyframe=None,
     ):
         # If control_net_stack is None, initialize as an empty list
         if cnet_stack is None:
             cnet_stack = []
 
-        control_net = load_controlnet(control_net_name, control_net_override)
+        control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
 
         # Extend the control_net_stack with the new tuple
         if control_net is not None:
@@ -313,7 +195,10 @@ class AVControlNetEfficientLoader(ControlNetApply):
                 ),
                 "preprocessor": (["None"] + s.preprocessors,),
             },
-            "optional": {"control_net_override": ("STRING", {"default": "None"})},
+            "optional": {
+                "control_net_override": ("STRING", {"default": "None"}),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+            },
         }
 
     RETURN_TYPES = ("CONDITIONING",)
@@ -328,8 +213,9 @@ class AVControlNetEfficientLoader(ControlNetApply):
         strength,
         preprocessor,
         control_net_override="None",
+        timestep_keyframe=None,
     ):
-        control_net = load_controlnet(control_net_name, control_net_override)
+        control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
         if control_net is None:
             return (conditioning,)
 
@@ -338,9 +224,61 @@ class AVControlNetEfficientLoader(ControlNetApply):
         return super().apply_controlnet(conditioning, control_net, image, strength)
 
 
+class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
+    controlnets = folder_paths.get_filename_list("controlnet")
+    preprocessors = list(control_net_preprocessors.keys())
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "control_net_name": (["None"] + s.controlnets,),
+                "positive": ("CONDITIONING", ),
+                "negative": ("CONDITIONING", ),
+                "image": ("IMAGE",),
+                "strength": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01},
+                ),
+                "start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
+                "end_percent": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
+                "preprocessor": (["None"] + s.preprocessors,),
+            },
+            "optional": {
+                "control_net_override": ("STRING", {"default": "None"}),
+                 "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+            },
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
+    RETURN_NAMES =("positive", "negative")
+    FUNCTION = "load_controlnet"
+    CATEGORY = "Art Venture/Loaders"
+
+    def load_controlnet(
+        self,
+        control_net_name,
+        positive, negative,
+        image,
+        strength,
+        start_percent, end_percent,
+        preprocessor,
+        control_net_override="None",
+        timestep_keyframe=None,
+    ):
+        control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
+        if control_net is None:
+            return (positive, negative)
+
+        image = apply_preprocessor(image, preprocessor)
+
+        return super().apply_controlnet(positive, negative, control_net, image, strength, start_percent, end_percent)
+
+
 NODE_CLASS_MAPPINGS = {
     "AV_ControlNetLoader": AVControlNetLoader,
     "AV_ControlNetEfficientLoader": AVControlNetEfficientLoader,
+    "AV_ControlNetEfficientLoaderAdvanced": AVControlNetEfficientLoaderAdvanced,
     "AV_ControlNetEfficientStacker": AVControlNetEfficientStacker,
     "AV_ControlNetPreprocessor": AV_ControlNetPreprocessor,
 }
@@ -348,6 +286,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetLoader": "ControlNet Loader",
     "AV_ControlNetEfficientLoader": "ControlNet Loader (Efficient)",
+    "AV_ControlNetEfficientLoaderAdvanced": "ControlNet Loader Adv. (Efficient)",
     "AV_ControlNetEfficientStacker": "ControlNet Stacker (Efficient)",
     "AV_ControlNetPreprocessor": "ControlNet Preprocessor",
 }
