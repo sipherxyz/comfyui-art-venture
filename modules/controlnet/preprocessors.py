@@ -125,3 +125,18 @@ try:
 
 except Exception as e:
     print(e)
+
+
+class DummyPreprocessor:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",)
+            }
+        }
+    
+    FUNCTION = "process"
+
+    def process(self, image):
+        return (image,)

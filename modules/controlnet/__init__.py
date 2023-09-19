@@ -3,8 +3,11 @@ from typing import List
 import folder_paths
 from nodes import ControlNetLoader, ControlNetApply, ControlNetApplyAdvanced
 
-from .preprocessors import control_net_preprocessors
+from .preprocessors import control_net_preprocessors, DummyPreprocessor
 from .advanced import comfy_load_controlnet
+
+
+control_net_preprocessors["tile"] = (DummyPreprocessor, [])
 
 
 def load_controlnet(control_net_name, control_net_override="None", timestep_keyframe = None):
@@ -23,16 +26,17 @@ def load_controlnet(control_net_name, control_net_override="None", timestep_keyf
     return comfy_load_controlnet(controlnet_path, timestep_keyframe=timestep_keyframe)
 
 
-def apply_preprocessor(image, preprocessor):
+def apply_preprocessor(image, preprocessor, resolution=512):
     if preprocessor == "None":
         return image
 
     if preprocessor not in control_net_preprocessors:
-        raise Exception(f"Preprocessor {preprocessor} not found")
+        raise Exception(f"Preprocessor {preprocessor} is not implemented")
 
     preprocessor_class, default_args = control_net_preprocessors[preprocessor]
     default_args: List = default_args.copy()
     default_args.insert(0, image)
+    default_args.append(resolution)
 
     required_args = preprocessor_class.INPUT_TYPES()["required"].keys()
     optional_args = preprocessor_class.INPUT_TYPES().get("optional", {}).keys()
@@ -45,9 +49,11 @@ def apply_preprocessor(image, preprocessor):
     )
 
     function_name = preprocessor_class.FUNCTION
-    image = getattr(preprocessor_class(), function_name)(**preprocessor_args)[0]
+    res = getattr(preprocessor_class(), function_name)(**preprocessor_args)
+    if isinstance(res, dict):
+        res = res["result"]
 
-    return image
+    return res[0]
 
 
 class AVControlNetLoader(ControlNetLoader):
@@ -79,9 +85,12 @@ class AV_ControlNetPreprocessor:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "preprocessor": (["None"] + s.preprocessors,),
+                "preprocessor": (["None", "tile"] + s.preprocessors,),
                 "sd_version": (["sd15", "sdxl", "sdxl_t2i"],),
             },
+            "optional": {
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64})
+            }
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -89,8 +98,8 @@ class AV_ControlNetPreprocessor:
     FUNCTION = "detect_controlnet"
     CATEGORY = "Art Venture/Loaders"
 
-    def detect_controlnet(self, image, preprocessor, sd_version):
-        image = apply_preprocessor(image, preprocessor)
+    def detect_controlnet(self, image, preprocessor, sd_version, resolution=512):
+        image = apply_preprocessor(image, preprocessor, resolution=resolution)
 
         controlnets = folder_paths.get_filename_list("controlnet")
         controlnets = filter(lambda x: sd_version in x, controlnets)
@@ -122,6 +131,9 @@ class AV_ControlNetPreprocessor:
             control_net_name = next((c for c in controlnets if "depth" in c), "None")
         if preprocessor in {"seg_ofcoco", "seg_ofade20k", "seg_ufade20k"}:
             control_net_name = next((c for c in controlnets if "seg" in c), "None")
+
+        if preprocessor in {"tile"}:
+            control_net_name = next((c for c in controlnets if "tile" in c), "None")
 
         return (image, control_net_name)
 
