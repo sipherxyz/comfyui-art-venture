@@ -161,12 +161,15 @@ class AVControlNetEfficientStacker:
                     "FLOAT",
                     {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01},
                 ),
+                "start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
+                "end_percent": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
                 "preprocessor": (["None"] + s.preprocessors,),
             },
             "optional": {
                 "cnet_stack": ("CONTROL_NET_STACK",),
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
 
@@ -184,6 +187,7 @@ class AVControlNetEfficientStacker:
         cnet_stack=None,
         control_net_override="None",
         timestep_keyframe=None,
+        resolution=512,
     ):
         # If control_net_stack is None, initialize as an empty list
         if cnet_stack is None:
@@ -193,7 +197,7 @@ class AVControlNetEfficientStacker:
 
         # Extend the control_net_stack with the new tuple
         if control_net is not None:
-            image = apply_preprocessor(image, preprocessor)
+            image = apply_preprocessor(image, preprocessor, resolution=resolution)
             cnet_stack.extend([(control_net, image, strength)])
 
         return (cnet_stack,)
@@ -219,6 +223,7 @@ class AVControlNetEfficientLoader(ControlNetApply):
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
 
@@ -235,12 +240,13 @@ class AVControlNetEfficientLoader(ControlNetApply):
         preprocessor,
         control_net_override="None",
         timestep_keyframe=None,
+        resolution=512,
     ):
         control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
         if control_net is None:
             return (conditioning,)
 
-        image = apply_preprocessor(image, preprocessor)
+        image = apply_preprocessor(image, preprocessor, resolution=resolution)
 
         return super().apply_controlnet(conditioning, control_net, image, strength)
 
@@ -267,7 +273,8 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
             },
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
-                 "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
 
@@ -286,12 +293,13 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
         preprocessor,
         control_net_override="None",
         timestep_keyframe=None,
+        resolution=512,
     ):
         control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
         if control_net is None:
             return (positive, negative)
 
-        image = apply_preprocessor(image, preprocessor)
+        image = apply_preprocessor(image, preprocessor, resolution=resolution)
 
         return super().apply_controlnet(positive, negative, control_net, image, strength, start_percent, end_percent)
 
