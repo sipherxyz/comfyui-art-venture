@@ -1,22 +1,19 @@
 import os
 
 import torch
-import numpy as np
-from PIL import Image
 from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode
 
 import folder_paths
-from comfy.model_management import text_encoder_device, soft_empty_cache
+from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
 from ..model_downloader import load_models
-from ..utils import is_junction
+from ..utils import is_junction, tensor2pil
 
 blip = None
 blip_size = 384
-blip_device = text_encoder_device()
-blip_current_device = None
-cpu = torch.device("cpu")
+gpu = text_encoder_device()
+cpu = text_encoder_offload_device()
 model_url = "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
 
 
@@ -33,18 +30,6 @@ def packages(versions=False):
     ]
 
 
-# Tensor to PIL
-def tensor2pil(image):
-    return Image.fromarray(
-        np.clip(255.0 * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
-    )
-
-
-# Convert PIL to Tensor
-def pil2tensor(image):
-    return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
-
-
 def transformImage_legacy(input_image):
     raw_image = input_image.convert("RGB")
     raw_image = raw_image.resize((blip_size, blip_size))
@@ -58,7 +43,7 @@ def transformImage_legacy(input_image):
             ),
         ]
     )
-    image = transform(raw_image).unsqueeze(0).to(blip_device)
+    image = transform(raw_image).unsqueeze(0).to(gpu)
     return image
 
 
@@ -75,14 +60,14 @@ def transformImage(input_image):
             ),
         ]
     )
-    image = transform(raw_image).unsqueeze(0).to(blip_device)
+    image = transform(raw_image).unsqueeze(0).to(gpu)
     return image.view(
         1, -1, blip_size, blip_size
     )  # Change the shape of the output tensor
 
 
-def load_blip():
-    global blip, blip_current_device
+def load_blip(device_mode):
+    global blip
     if blip is None:
         blip_dir = os.path.join(folder_paths.models_dir, "blip")
         if not os.path.exists(blip_dir) and not is_junction(blip_dir):
@@ -90,7 +75,7 @@ def load_blip():
 
         files = load_models(
             model_path=blip_dir,
-            model_url="https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth",
+            model_url=model_url,
             ext_filter=[".pth"],
             download_name="model_base_caption_capfilt_large.pth",
         )
@@ -107,18 +92,18 @@ def load_blip():
         )
         blip.eval()
 
-    if blip_current_device != blip_device:
-        blip_current_device = blip_device
-        blip = blip.to(blip_current_device)
+    if device_mode != "CPU":
+        blip = blip.to(gpu)
+
+    blip.is_auto_mode = device_mode == "AUTO"
 
     return blip
 
 
 def unload_blip():
-    global blip, blip_current_device
-    if blip is not None:
-        blip_current_device = cpu
-        blip = blip.to(blip_current_device)
+    global blip
+    if blip is not None and blip.is_auto_mode:
+        blip = blip.to(cpu)
 
     soft_empty_cache()
 
@@ -151,6 +136,9 @@ class BlipCaption:
                     },
                 ),
             },
+            "optional": {
+                "device_mode": (["AUTO", "Prefer GPU", "CPU"],),
+            }
         }
 
     RETURN_TYPES = ("STRING",)
@@ -160,10 +148,8 @@ class BlipCaption:
 
     CATEGORY = "Art Venture/Utils"
 
-    def blip_caption(self, image, min_length, max_length):
-        print(f"\033[34mStarting BLIP...\033[0m")
-
-        model = load_blip()
+    def blip_caption(self, image, min_length, max_length, device_mode="AUTO"):
+        model = load_blip(device_mode)
         image = tensor2pil(image)
 
         if "transformers==4.26.1" in packages(True):
@@ -172,22 +158,17 @@ class BlipCaption:
         else:
             tensor = transformImage(image)
 
-        with torch.no_grad():
-            caption = model.generate(
-                tensor,
-                sample=False,
-                num_beams=1,
-                min_length=min_length,
-                max_length=max_length,
-            )
-
-        unload_blip()
-
-        return (caption[0],)
-
-
-NODE_CLASS_MAPPINGS = {"BLIPCaption": BlipCaption}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "BLIPCaption": "BLIP Caption",
-}
+        try:
+            with torch.no_grad():
+                caption = model.generate(
+                    tensor,
+                    sample=False,
+                    num_beams=1,
+                    min_length=min_length,
+                    max_length=max_length,
+                )
+            return (caption[0],)
+        except:
+            raise
+        finally:
+            unload_blip()
