@@ -14,19 +14,18 @@ blip = None
 blip_size = 384
 gpu = text_encoder_device()
 cpu = text_encoder_offload_device()
-model_url = "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
+model_url = (
+    "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
+)
 
 
-# Freeze PIP modules
 def packages(versions=False):
     import subprocess
     import sys
 
     return [
         (r.decode().split("==")[0] if not versions else r.decode())
-        for r in subprocess.check_output(
-            [sys.executable, "-m", "pip", "freeze"]
-        ).split()
+        for r in subprocess.check_output([sys.executable, "-m", "pip", "freeze"]).split()
     ]
 
 
@@ -61,9 +60,7 @@ def transformImage(input_image):
         ]
     )
     image = transform(raw_image).unsqueeze(0).to(gpu)
-    return image.view(
-        1, -1, blip_size, blip_size
-    )  # Change the shape of the output tensor
+    return image.view(1, -1, blip_size, blip_size)  # Change the shape of the output tensor
 
 
 def load_blip(device_mode):
@@ -108,6 +105,14 @@ def unload_blip():
     soft_empty_cache()
 
 
+def join_caption(caption, prefix, suffix):
+    if prefix:
+        caption = prefix + ", " + caption
+    if suffix:
+        caption = caption + ", " + suffix
+    return caption
+
+
 class BlipCaption:
     def __init__(self):
         pass
@@ -138,7 +143,10 @@ class BlipCaption:
             },
             "optional": {
                 "device_mode": (["AUTO", "Prefer GPU", "CPU"],),
-            }
+                "prefix": ("STRING", {"default": ""}),
+                "suffix": ("STRING", {"default": ""}),
+                "enabled": ("BOOLEAN", {"default": True}),
+            },
         }
 
     RETURN_TYPES = ("STRING",)
@@ -148,7 +156,10 @@ class BlipCaption:
 
     CATEGORY = "Art Venture/Utils"
 
-    def blip_caption(self, image, min_length, max_length, device_mode="AUTO"):
+    def blip_caption(self, image, min_length, max_length, device_mode="AUTO", prefix="", suffix="", enabled=True):
+        if not enabled:
+            return (join_caption("", prefix, suffix),)
+
         model = load_blip(device_mode)
         image = tensor2pil(image)
 
@@ -167,7 +178,7 @@ class BlipCaption:
                     min_length=min_length,
                     max_length=max_length,
                 )
-            return (caption[0],)
+            return (join_caption(caption[0], prefix, suffix),)
         except:
             raise
         finally:
