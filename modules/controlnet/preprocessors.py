@@ -84,11 +84,14 @@ try:
             nodes["OpenposePreprocessor"],
             ["enable", "enable", "enable"],
         )
+        control_net_preprocessors["pose"] = control_net_preprocessors["openpose"]
     if "DWPreprocessor" in nodes:
         control_net_preprocessors["dwpose"] = (
             nodes["DWPreprocessor"],
             ["enable", "enable", "enable"],
         )
+        # use DWPreprocessor for pose by default if available
+        control_net_preprocessors["pose"] = control_net_preprocessors["dwpose"]
     if "BAE-NormalMapPreprocessor" in nodes:
         control_net_preprocessors["normalmap_bae"] = (
             nodes["BAE-NormalMapPreprocessor"],

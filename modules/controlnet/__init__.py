@@ -130,7 +130,7 @@ class AV_ControlNetPreprocessor:
             )
         if preprocessor in {"hed", "hed_safe", "pidi", "pidi_safe"}:
             control_net_name = next((c for c in controlnets if "softedge" in c), "None")
-        if preprocessor in {"openpose", "dwpose"}:
+        if preprocessor in {"pose", "openpose", "dwpose"}:
             control_net_name = next((c for c in controlnets if "openpose" in c), "None")
         if preprocessor in {"normalmap_bae", "normalmap_midas"}:
             control_net_name = next(
