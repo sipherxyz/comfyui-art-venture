@@ -10,12 +10,10 @@ from .advanced import comfy_load_controlnet
 control_net_preprocessors["tile"] = (DummyPreprocessor, [])
 
 
-def load_controlnet(control_net_name, control_net_override="None", timestep_keyframe = None):
+def load_controlnet(control_net_name, control_net_override="None", timestep_keyframe=None):
     if control_net_override != "None":
         if control_net_override not in folder_paths.get_filename_list("controlnet"):
-            print(
-                f"Warning: Not found ControlNet model {control_net_override}. Use {control_net_name} instead."
-            )
+            print(f"Warning: Not found ControlNet model {control_net_override}. Use {control_net_name} instead.")
         else:
             control_net_name = control_net_override
 
@@ -41,12 +39,7 @@ def apply_preprocessor(image, preprocessor, resolution=512):
     required_args = preprocessor_class.INPUT_TYPES()["required"].keys()
     optional_args = preprocessor_class.INPUT_TYPES().get("optional", {}).keys()
     preprocessor_args = {key: default_args[i] for i, key in enumerate(required_args)}
-    preprocessor_args.update(
-        {
-            key: default_args[i + len(required_args)]
-            for i, key in enumerate(optional_args)
-        }
-    )
+    preprocessor_args.update({key: default_args[i + len(required_args)] for i, key in enumerate(optional_args)})
 
     function_name = preprocessor_class.FUNCTION
     res = getattr(preprocessor_class(), function_name)(**preprocessor_args)
@@ -60,12 +53,10 @@ class AVControlNetLoader(ControlNetLoader):
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {
-                "control_net_name": (folder_paths.get_filename_list("controlnet"),)
-            },
+            "required": {"control_net_name": (folder_paths.get_filename_list("controlnet"),)},
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
-                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
             },
         }
 
@@ -91,7 +82,7 @@ class AV_ControlNetPreprocessor:
             "optional": {
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
                 "preprocessor_override": ("STRING", {"default": "None"}),
-            }
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -99,7 +90,7 @@ class AV_ControlNetPreprocessor:
     FUNCTION = "detect_controlnet"
     CATEGORY = "Art Venture/Loaders"
 
-    def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override = "None"):
+    def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override="None"):
         if preprocessor_override != "None":
             if preprocessor_override not in control_net_preprocessors:
                 print(
@@ -117,25 +108,19 @@ class AV_ControlNetPreprocessor:
 
         control_net_name = "None"
         if preprocessor in {"canny", "scribble", "mlsd"}:
-            control_net_name = next(
-                (c for c in controlnets if preprocessor in c), "None"
-            )
+            control_net_name = next((c for c in controlnets if preprocessor in c), "None")
         if preprocessor in {"scribble", "scribble_hed"}:
             control_net_name = next((c for c in controlnets if "scribble" in c), "None")
         if preprocessor in {"lineart", "lineart_coarse"}:
             control_net_name = next((c for c in controlnets if "lineart." in c), "None")
         if preprocessor in {"lineart_anime", "lineart_manga"}:
-            control_net_name = next(
-                (c for c in controlnets if "lineart_anime" in c), "None"
-            )
+            control_net_name = next((c for c in controlnets if "lineart_anime" in c), "None")
         if preprocessor in {"hed", "hed_safe", "pidi", "pidi_safe"}:
             control_net_name = next((c for c in controlnets if "softedge" in c), "None")
         if preprocessor in {"pose", "openpose", "dwpose"}:
             control_net_name = next((c for c in controlnets if "openpose" in c), "None")
         if preprocessor in {"normalmap_bae", "normalmap_midas"}:
-            control_net_name = next(
-                (c for c in controlnets if "normalbae" in c), "None"
-            )
+            control_net_name = next((c for c in controlnets if "normalbae" in c), "None")
         if preprocessor in {"depth", "depth_midas", "depth_zoe"}:
             control_net_name = next((c for c in controlnets if "depth" in c), "None")
         if preprocessor in {"seg_ofcoco", "seg_ofade20k", "seg_ufade20k"}:
@@ -168,7 +153,7 @@ class AVControlNetEfficientStacker:
             "optional": {
                 "cnet_stack": ("CONTROL_NET_STACK",),
                 "control_net_override": ("STRING", {"default": "None"}),
-                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
@@ -183,6 +168,8 @@ class AVControlNetEfficientStacker:
         control_net_name,
         image,
         strength,
+        start_percent,
+        end_percent,
         preprocessor,
         cnet_stack=None,
         control_net_override="None",
@@ -198,7 +185,7 @@ class AVControlNetEfficientStacker:
         # Extend the control_net_stack with the new tuple
         if control_net is not None:
             image = apply_preprocessor(image, preprocessor, resolution=resolution)
-            cnet_stack.extend([(control_net, image, strength)])
+            cnet_stack.extend([(control_net, image, strength, start_percent, end_percent)])
 
         return (cnet_stack,)
 
@@ -222,7 +209,7 @@ class AVControlNetEfficientLoader(ControlNetApply):
             },
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
-                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
@@ -260,8 +247,8 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
         return {
             "required": {
                 "control_net_name": (["None"] + s.controlnets,),
-                "positive": ("CONDITIONING", ),
-                "negative": ("CONDITIONING", ),
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
                 "image": ("IMAGE",),
                 "strength": (
                     "FLOAT",
@@ -273,23 +260,25 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
             },
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
-                "timestep_keyframe": ("TIMESTEP_KEYFRAME", ),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
             },
         }
 
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
-    RETURN_NAMES =("positive", "negative")
+    RETURN_NAMES = ("positive", "negative")
     FUNCTION = "load_controlnet"
     CATEGORY = "Art Venture/Loaders"
 
     def load_controlnet(
         self,
         control_net_name,
-        positive, negative,
+        positive,
+        negative,
         image,
         strength,
-        start_percent, end_percent,
+        start_percent,
+        end_percent,
         preprocessor,
         control_net_override="None",
         timestep_keyframe=None,
