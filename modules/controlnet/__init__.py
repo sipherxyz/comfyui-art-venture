@@ -89,7 +89,8 @@ class AV_ControlNetPreprocessor:
                 "sd_version": (["sd15", "sdxl", "sdxl_t2i"],),
             },
             "optional": {
-                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64})
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+                "preprocessor_override": ("STRING", {"default": "None"}),
             }
         }
 
@@ -98,7 +99,15 @@ class AV_ControlNetPreprocessor:
     FUNCTION = "detect_controlnet"
     CATEGORY = "Art Venture/Loaders"
 
-    def detect_controlnet(self, image, preprocessor, sd_version, resolution=512):
+    def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override = "None"):
+        if preprocessor_override != "None":
+            if preprocessor_override not in control_net_preprocessors:
+                print(
+                    f"Warning: Not found ControlNet preprocessor {preprocessor_override}. Use {preprocessor} instead."
+                )
+            else:
+                preprocessor = preprocessor_override
+
         image = apply_preprocessor(image, preprocessor, resolution=resolution)
 
         controlnets = folder_paths.get_filename_list("controlnet")
