@@ -75,21 +75,19 @@ class UtilLoadImageFromUrl:
             i = Image.open(io.BytesIO(response.content))
 
         i = ImageOps.exif_transpose(i)
-        if not keep_alpha_channel:
-            image = i.convert("RGB")
-        else:
-            if i.mode != "RGBA":
-                i = i.convert("RGBA")
+        mask = None
+        if "A" in i.getbands():
+            mask = i.getchannel("A")
 
+        if i.mode == "RGBA":
             # recreate image to fix weird RGB image
             alpha = i.split()[-1]
             image = Image.new("RGB", i.size, (0, 0, 0))
             image.paste(i, mask=alpha)
             image.putalpha(alpha)
 
-        mask = None
-        if "A" in i.getbands():
-            mask = i.getchannel("A")
+        if not keep_alpha_channel:
+            image = i.convert("RGB")
 
         return (image, mask)
 
