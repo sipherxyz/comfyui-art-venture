@@ -55,11 +55,7 @@ def upload_to_av(
             upload_url += "/upload"
 
     auth_token = config.get("av_token")
-    headers = (
-        {"Authorization": f"Bearer {auth_token}"}
-        if auth_token and auth_token != ""
-        else None
-    )
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token and auth_token != "" else None
 
     upload = lambda: requests.post(
         upload_url,
@@ -75,11 +71,7 @@ def upload_to_av(
 def get_task_from_av():
     get_task_url = config.get("av_endpoint") + "/api/recipe/sd-tasks/one-in-queue"
     auth_token = config.get("av_token", None)
-    headers = (
-        {"Authorization": f"Bearer {auth_token}"}
-        if auth_token and auth_token != ""
-        else None
-    )
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token and auth_token != "" else None
 
     response = requests.get(get_task_url, timeout=10, headers=headers)
     if response.status_code >= 400:
@@ -158,9 +150,7 @@ def set_dict_attribute(dict_inst: dict, name_string: str, value):
 def is_junction(src: str) -> bool:
     import subprocess
 
-    child = subprocess.Popen(
-        'fsutil reparsepoint query "{}"'.format(src), stdout=subprocess.PIPE
-    )
+    child = subprocess.Popen('fsutil reparsepoint query "{}"'.format(src), stdout=subprocess.PIPE)
     streamdata = child.communicate()[0]
     rc = child.returncode
     return rc == 0
@@ -173,9 +163,7 @@ def load_module(module_path):
     if os.path.isfile(module_path):
         module_spec = importlib.util.spec_from_file_location(module_name, module_path)
     else:
-        module_spec = importlib.util.spec_from_file_location(
-            module_name, os.path.join(module_path, "__init__.py")
-        )
+        module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(module_path, "__init__.py"))
 
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
@@ -188,7 +176,7 @@ def pil2tensor(image):
 
 
 def tensor2pil(image):
-    return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+    return Image.fromarray(np.clip(255.0 * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
 
 
 def resize_image(resize_mode, im: Image.Image, width, height):
@@ -208,7 +196,6 @@ def resize_image(resize_mode, im: Image.Image, width, height):
 
     def resize(im: Image.Image, w, h):
         return im.resize((w, h), resample=Image.LANCZOS)
-        
 
     if resize_mode == 0:
         res = resize(im, width, height)
@@ -239,12 +226,17 @@ def resize_image(resize_mode, im: Image.Image, width, height):
             fill_height = height // 2 - src_h // 2
             if fill_height > 0:
                 res.paste(resized.resize((width, fill_height), box=(0, 0, width, 0)), box=(0, 0))
-                res.paste(resized.resize((width, fill_height), box=(0, resized.height, width, resized.height)), box=(0, fill_height + src_h))
+                res.paste(
+                    resized.resize((width, fill_height), box=(0, resized.height, width, resized.height)),
+                    box=(0, fill_height + src_h),
+                )
         elif ratio > src_ratio:
             fill_width = width // 2 - src_w // 2
             if fill_width > 0:
                 res.paste(resized.resize((fill_width, height), box=(0, 0, 0, height)), box=(0, 0))
-                res.paste(resized.resize((fill_width, height), box=(resized.width, 0, resized.width, height)), box=(fill_width + src_w, 0))
+                res.paste(
+                    resized.resize((fill_width, height), box=(resized.width, 0, resized.width, height)),
+                    box=(fill_width + src_w, 0),
+                )
 
     return res
-

@@ -2,3 +2,4 @@ timm
 transformers
 fairscale
 pycocoevalcap
+opencv-python

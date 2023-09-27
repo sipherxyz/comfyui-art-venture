@@ -3,6 +3,7 @@ import os
 import json
 import torch
 import base64
+import random
 import requests
 from typing import Dict, Tuple
 
@@ -15,6 +16,28 @@ from .utils import pil2tensor, get_dict_attribute
 
 
 MAX_RESOLUTION = 8192
+
+
+def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
+    if prefix is None:
+        prefix = "preview_" + "".join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
+
+    # save image to temp folder
+    (
+        outdir,
+        filename,
+        counter,
+        subfolder,
+        _,
+    ) = folder_paths.get_save_image_path(prefix, output_dir, image.width, image.height)
+    file = f"{filename}_{counter:05}.png"
+    image.save(os.path.join(outdir, file), format="PNG", compress_level=4)
+
+    return {
+        "filename": file,
+        "subfolder": subfolder,
+        "type": "temp",
+    }
 
 
 class UtilLoadImageFromUrl:
@@ -74,22 +97,9 @@ class UtilLoadImageFromUrl:
         image, mask = self.load_image_from_url(url, keep_alpha_channel)
 
         # save image to temp folder
-        (
-            outdir,
-            filename,
-            counter,
-            subfolder,
-            _,
-        ) = folder_paths.get_save_image_path(self.filename_prefix, self.output_dir, image.width, image.height)
-        file = f"{filename}_{counter:05}.png"
-        image.save(os.path.join(outdir, file), format="PNG", compress_level=4)
-        preview = {
-            "filename": file,
-            "subfolder": subfolder,
-            "type": "temp",
-        }
-
+        preview = prepare_image_for_preview(image, self.output_dir, self.filename_prefix)
         image = pil2tensor(image)
+
         if mask:
             mask = np.array(mask).astype(np.float32) / 255.0
             mask = 1.0 - torch.from_numpy(mask)
@@ -259,16 +269,17 @@ class UtilRandomInt:
         return {
             "required": {
                 "min": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
-                "max": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "max": ("INT", {"default": 100, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
             }
         }
 
-    RETURN_TYPES = ("INT",)
+    RETURN_TYPES = ("INT", "STRING")
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "random_int"
 
     def random_int(self, min: int, max: int):
-        return (torch.randint(min, max, (1,)).item(),)
+        num = torch.randint(min, max, (1,)).item()
+        return (num, str(num))
 
 
 class UtilRandomFloat:
@@ -276,17 +287,18 @@ class UtilRandomFloat:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "min": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0}),
-                "max": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0}),
+                "min": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "max": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
             }
         }
 
-    RETURN_TYPES = ("FLOAT",)
+    RETURN_TYPES = ("FLOAT", "STRING")
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "random_float"
 
     def random_float(self, min: float, max: float):
-        return (torch.rand(1).item() * (max - min) + min,)
+        num = torch.rand(1).item() * (max - min) + min
+        return (num, str(num))
 
 
 class UtilStringToInt:
