@@ -316,6 +316,27 @@ class UtilStringToInt:
         return (int(string),)
 
 
+class UtilNumberScaler:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "min": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "max": ("FLOAT", {"default": 10.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "scale_to_min": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "scale_to_max": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
+            }
+        }
+
+    RETURN_TYPES = ("FLOAT",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "scale_number"
+
+    def scale_number(self, min: float, max: float, scale_to_min: float, scale_to_max: float, value: float):
+        num = (value - min) / (max - min) * (scale_to_max - scale_to_min) + scale_to_min
+        return (num,)
+
 class UtilImageMuxer:
     @classmethod
     def INPUT_TYPES(s):
@@ -641,6 +662,7 @@ NODE_CLASS_MAPPINGS = {
     "GetBoolFromJson": UtilGetBoolFromJson,
     "RandomInt": UtilRandomInt,
     "RandomFloat": UtilRandomFloat,
+    "NumberScaler": UtilNumberScaler,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -661,4 +683,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetBoolFromJson": "Get Bool From JSON",
     "RandomInt": "Random Int",
     "RandomFloat": "Random Float",
+    "NumberScaler": "Number Scaler",
 }
