@@ -48,6 +48,11 @@ from .isnet import (
     NODE_CLASS_MAPPINGS as ISNET_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as ISNET_NODE_DISPLAY_NAME_MAPPINGS,
 )
+from .inpaint import (
+    NODE_CLASS_MAPPINGS as INPAINT_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as INPAINT_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
 
 class AVVAELoader(VAELoader):
     @classmethod
@@ -61,9 +66,7 @@ class AVVAELoader(VAELoader):
     def load_vae(self, vae_name, vae_override="None"):
         if vae_override != "None":
             if vae_override not in folder_paths.get_filename_list("vae"):
-                print(
-                    f"Warning: Not found VAE model {vae_override}. Use {vae_name} instead."
-                )
+                print(f"Warning: Not found VAE model {vae_override}. Use {vae_name} instead.")
             else:
                 vae_name = vae_override
 
@@ -82,9 +85,7 @@ class AVLoraLoader(LoraLoader):
     def load_lora(self, lora_name, lora_override="None"):
         if lora_override != "None":
             if lora_override not in folder_paths.get_filename_list("loras"):
-                print(
-                    f"Warning: Not found Lora model {lora_override}. Use {lora_name} instead."
-                )
+                print(f"Warning: Not found Lora model {lora_override}. Use {lora_name} instead.")
             else:
                 lora_name = lora_override
 
@@ -155,16 +156,10 @@ class AVCheckpointModelsToParametersPipe:
             },
             "optional": {
                 "pipe": ("PIPE",),
-                "secondary_ckpt_name": (
-                    ["None"] + folder_paths.get_filename_list("checkpoints"),
-                ),
+                "secondary_ckpt_name": (["None"] + folder_paths.get_filename_list("checkpoints"),),
                 "vae_name": (["None"] + folder_paths.get_filename_list("vae"),),
-                "upscaler_name": (
-                    ["None"] + folder_paths.get_filename_list("upscale_models"),
-                ),
-                "secondary_upscaler_name": (
-                    ["None"] + folder_paths.get_filename_list("upscale_models"),
-                ),
+                "upscaler_name": (["None"] + folder_paths.get_filename_list("upscale_models"),),
+                "secondary_upscaler_name": (["None"] + folder_paths.get_filename_list("upscale_models"),),
                 "lora_1_name": (["None"] + folder_paths.get_filename_list("loras"),),
                 "lora_2_name": (["None"] + folder_paths.get_filename_list("loras"),),
                 "lora_3_name": (["None"] + folder_paths.get_filename_list("loras"),),
@@ -188,14 +183,10 @@ class AVCheckpointModelsToParametersPipe:
         lora_3_name="None",
     ):
         pipe["ckpt_name"] = ckpt_name if ckpt_name != "None" else None
-        pipe["secondary_ckpt_name"] = (
-            secondary_ckpt_name if secondary_ckpt_name != "None" else None
-        )
+        pipe["secondary_ckpt_name"] = secondary_ckpt_name if secondary_ckpt_name != "None" else None
         pipe["vae_name"] = vae_name if vae_name != "None" else None
         pipe["upscaler_name"] = upscaler_name if upscaler_name != "None" else None
-        pipe["secondary_upscaler_name"] = (
-            secondary_upscaler_name if secondary_upscaler_name != "None" else None
-        )
+        pipe["secondary_upscaler_name"] = secondary_upscaler_name if secondary_upscaler_name != "None" else None
         pipe["lora_1_name"] = lora_1_name if lora_1_name != "None" else None
         pipe["lora_2_name"] = lora_2_name if lora_2_name != "None" else None
         pipe["lora_3_name"] = lora_3_name if lora_3_name != "None" else None
@@ -221,9 +212,7 @@ class AVPromptsToParametersPipe:
     CATEGORY = "Art Venture/Parameters"
     FUNCTION = "prompt_to_parameter_pipe"
 
-    def prompt_to_parameter_pipe(
-        self, positive, negative, pipe: Dict = {}, image=None, mask=None
-    ):
+    def prompt_to_parameter_pipe(self, positive, negative, pipe: Dict = {}, image=None, mask=None):
         pipe["positive"] = positive
         pipe["negative"] = negative
         pipe["image"] = image
@@ -375,3 +364,6 @@ NODE_DISPLAY_NAME_MAPPINGS.update(IP_ADAPTER_NODE_DISPLAY_NAME_MAPPINGS)
 
 NODE_CLASS_MAPPINGS.update(ISNET_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(ISNET_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(INPAINT_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(INPAINT_NODE_DISPLAY_NAME_MAPPINGS)

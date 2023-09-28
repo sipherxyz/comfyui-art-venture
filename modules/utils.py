@@ -240,3 +240,7 @@ def resize_image(resize_mode, im: Image.Image, width, height):
                 )
 
     return res
+
+
+def tensor2bytes(image: torch.Tensor) -> bytes:
+    return tensor2pil(image).tobytes()
