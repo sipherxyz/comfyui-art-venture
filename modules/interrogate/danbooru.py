@@ -6,7 +6,7 @@ import numpy as np
 import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
-from ..model_downloader import load_models
+from ..model_utils import download_model
 from ..utils import is_junction, tensor2pil, resize_image
 from .blip_node import join_caption
 
@@ -25,7 +25,7 @@ def load_danbooru(device_mode):
         if not os.path.exists(blip_dir) and not is_junction(blip_dir):
             os.makedirs(blip_dir, exist_ok=True)
 
-        files = load_models(
+        files = download_model(
             model_path=blip_dir,
             model_url="https://github.com/AUTOMATIC1111/TorchDeepDanbooru/releases/download/v1/model-resnet_custom_v3.pt",
             ext_filter=[".pt"],

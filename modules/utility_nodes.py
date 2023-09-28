@@ -7,12 +7,12 @@ import random
 import requests
 from typing import Dict, Tuple
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter
 import numpy as np
 
 import folder_paths
 
-from .utils import pil2tensor, get_dict_attribute
+from .utils import pil2tensor, tensor2pil, get_dict_attribute
 
 
 MAX_RESOLUTION = 8192
@@ -335,6 +335,7 @@ class UtilNumberScaler:
         num = (value - min) / (max - min) * (scale_to_max - scale_to_min) + scale_to_min
         return (num,)
 
+
 class UtilImageMuxer:
     @classmethod
     def INPUT_TYPES(s):
@@ -576,20 +577,13 @@ class UtilImageScaleDown:
         else:
             s = images
 
-        pil_images = []
-        for idx, image in enumerate(s):
-            i = 255.0 * image.cpu().numpy()
-            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
-            img = img.convert("RGB")
+        results = []
+        for image in s:
+            img = tensor2pil(image).convert("RGB")
             img = img.resize((width, height), Image.LANCZOS)
-            pil_images.append(img)
+            results.append(pil2tensor(img))
 
-        results = torch.cat(
-            [torch.from_numpy(np.array(img).astype(np.float32) / 255.0)[None,] for img in pil_images],
-            dim=0,
-        )
-
-        return (results,)
+        return (torch.cat(results, dim=0),)
 
 
 class UtilImageScaleDownBy(UtilImageScaleDown):
@@ -610,12 +604,119 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
     FUNCTION = "image_scale_down_by"
 
     def image_scale_down_by(self, images, scale_by):
-        print("images", images.shape)
         width = images.shape[2]
         height = images.shape[1]
         new_width = int(width * scale_by)
         new_height = int(height * scale_by)
         return self.image_scale_down(images, new_width, new_height, "center")
+
+
+class UtilImageScaleDownToSize(UtilImageScaleDownBy):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "size": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1}),
+                "mode": (["min", "max"], {"default": "max"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_scale_down_to_size"
+
+    def image_scale_down_to_size(self, images, size, mode):
+        width = images.shape[2]
+        height = images.shape[1]
+
+        if mode == "min":
+            scale_by = size / min(width, height)
+        else:
+            scale_by = size / max(width, height)
+
+        scale_by = min(scale_by, 1.0)
+        return self.image_scale_down_by(images, scale_by)
+
+
+class UtilImageScaleDownToTotalPixels(UtilImageScaleDownBy):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "megapixels": ("INT", {"default": 1, "min": 1, "max": 100}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_scale_down_to_total_pixels"
+
+    def image_scale_down_to_total_pixels(self, images, megapixels):
+        width = images.shape[2]
+        height = images.shape[1]
+        scale_by = np.sqrt((megapixels * 1024 * 1024) / (width * height))
+        scale_by = min(scale_by, 1.0)
+
+        return self.image_scale_down_by(images, scale_by)
+
+
+class UtilImageAlphaComposite:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image_1": ("IMAGE",),
+                "image_2": ("IMAGE",),
+                "alpha": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_alpha_composite"
+
+    def image_alpha_composite(self, image_1: torch.Tensor, image_2: torch.Tensor, alpha):
+        if image_1.shape[0] != image_2.shape[0]:
+            raise Exception("Images must have the same amount")
+
+        if image_1.shape[1] != image_2.shape[1] or image_1.shape[2] != image_2.shape[2]:
+            raise Exception("Images must have the same size")
+
+        composited_images = []
+        for i, im1 in enumerate(image_1):
+            composited = Image.alpha_composite(
+                im1.convert("RGBA"),
+                image_2[i].convert("RGBA"),
+            )
+            composited_images.append(pil2tensor(composited))
+
+        return (torch.cat(composited_images, dim=0),)
+
+
+class UtilImageGaussianBlur:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "radius": ("INT", {"default": 1, "min": 1, "max": 100}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_gaussian_blur"
+
+    def image_gaussian_blur(self, images, radius):
+        blured_images = []
+        for image in images:
+            img = tensor2pil(image)
+            img = img.filter(ImageFilter.GaussianBlur(radius=radius))
+            blured_images.append(pil2tensor(img))
+
+        return (torch.cat(blured_images, dim=0),)
 
 
 class UtilSeedSelector:
@@ -648,6 +749,10 @@ NODE_CLASS_MAPPINGS = {
     "ImageMuxer": UtilImageMuxer,
     "ImageScaleDown": UtilImageScaleDown,
     "ImageScaleDownBy": UtilImageScaleDownBy,
+    "ImageScaleDownToSize": UtilImageScaleDownToSize,
+    "ImageScaleDownToTotalPixels": UtilImageScaleDownToTotalPixels,
+    "ImageAlphaComposite": UtilImageAlphaComposite,
+    "ImageGaussianBlur": UtilImageGaussianBlur,
     "DependenciesEdit": UtilDependenciesEdit,
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
@@ -667,8 +772,12 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageAsMaskFromUrl": "Load Image (as Mask) From URL",
     "StringToInt": "String to Int",
     "ImageMuxer": "Image Muxer",
-    "ImageScaleDown": "Image Scale Down",
-    "ImageScaleDownBy": "Image Scale Down By",
+    "ImageScaleDown": "Scale Down",
+    "ImageScaleDownBy": "Scale Down By",
+    "ImageScaleDownToSize": "Scale Down To Size",
+    "ImageScaleDownToTotalPixels": "Scale Down To Megapixels",
+    "ImageAlphaComposite": "Image Alpha Composite",
+    "ImageGaussianBlur": "Image Gaussian Blur",
     "DependenciesEdit": "Dependencies Edit",
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",

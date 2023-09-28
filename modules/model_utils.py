@@ -1,5 +1,6 @@
 import os
 import re
+import torch
 from urllib.parse import urlparse
 
 
@@ -55,7 +56,7 @@ def load_file_from_url(
     return cached_file
 
 
-def load_models(
+def download_model(
     model_path: str,
     model_url: str = None,
     ext_filter=None,
@@ -78,20 +79,14 @@ def load_models(
             if os.path.islink(full_path) and not os.path.exists(full_path):
                 print(f"Skipping broken symlink: {full_path}")
                 continue
-            if ext_blacklist is not None and any(
-                full_path.endswith(x) for x in ext_blacklist
-            ):
+            if ext_blacklist is not None and any(full_path.endswith(x) for x in ext_blacklist):
                 continue
             if full_path not in output:
                 output.append(full_path)
 
         if model_url is not None and len(output) == 0:
             if download_name is not None:
-                output.append(
-                    load_file_from_url(
-                        model_url, model_dir=model_path, file_name=download_name
-                    )
-                )
+                output.append(load_file_from_url(model_url, model_dir=model_path, file_name=download_name))
             else:
                 output.append(model_url)
 
@@ -99,3 +94,9 @@ def load_models(
         pass
 
     return output
+
+
+def load_jit_torch_file(model_path: str):
+    model = torch.jit.load(model_path, map_location="cpu")
+    model.eval()
+    return model

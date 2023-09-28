@@ -7,7 +7,7 @@ from torchvision.transforms.functional import InterpolationMode
 import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
-from ..model_downloader import load_models
+from ..model_utils import download_model
 from ..utils import is_junction, tensor2pil
 
 blip = None
@@ -70,7 +70,7 @@ def load_blip(device_mode):
         if not os.path.exists(blip_dir) and not is_junction(blip_dir):
             os.makedirs(blip_dir, exist_ok=True)
 
-        files = load_models(
+        files = download_model(
             model_path=blip_dir,
             model_url=model_url,
             ext_filter=[".pth"],
