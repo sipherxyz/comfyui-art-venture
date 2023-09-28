@@ -14,7 +14,7 @@ blip = None
 blip_size = 384
 gpu = text_encoder_device()
 cpu = text_encoder_offload_device()
-model_url = (
+BLIP_MODEL_URL = (
     "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
 )
 
@@ -72,7 +72,7 @@ def load_blip(device_mode):
 
         files = download_model(
             model_path=blip_dir,
-            model_url=model_url,
+            model_url=BLIP_MODEL_URL,
             ext_filter=[".pth"],
             download_name="model_base_caption_capfilt_large.pth",
         )

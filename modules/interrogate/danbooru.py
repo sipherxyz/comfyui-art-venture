@@ -27,7 +27,7 @@ def load_danbooru(device_mode):
 
         files = download_model(
             model_path=blip_dir,
-            model_url="https://github.com/AUTOMATIC1111/TorchDeepDanbooru/releases/download/v1/model-resnet_custom_v3.pt",
+            model_url=model_url,
             ext_filter=[".pt"],
             download_name="model-resnet_custom_v3.pt",
         )
