@@ -50,12 +50,12 @@ def extract_img(image, gray: bool = False, return_exif: bool = False):
         np_img = np.array(image)
     else:
         if image.mode == "RGBA":
-            np_img = np.array(image)
+            np_img = np.array(image).astype(np.uint8)
             alpha_channel = np_img[:, :, -1]
             np_img = cv2.cvtColor(np_img, cv2.COLOR_RGBA2RGB)
         else:
             image = image.convert("RGB")
-            np_img = np.array(image)
+            np_img = np.array(image).astype(np.uint8)
 
     if return_exif:
         return np_img, alpha_channel, exif_infos

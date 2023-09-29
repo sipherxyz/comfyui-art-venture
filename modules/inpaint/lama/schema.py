@@ -1,8 +1,4 @@
 from enum import Enum
-from typing import Optional
-
-from PIL.Image import Image
-from pydantic import BaseModel
 
 
 class HDStrategy(str, Enum):
@@ -16,10 +12,7 @@ class HDStrategy(str, Enum):
     CROP = "Crop"
 
 
-class Config(BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
-
+class Config:
     # Configs for High Resolution Strategy(different way to preprocess image)
     hd_strategy: str = HDStrategy.CROP  # See HDStrategy Enum
     hd_strategy_crop_margin: int = 196

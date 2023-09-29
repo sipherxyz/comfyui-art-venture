@@ -15,10 +15,6 @@ import comfy.utils
 from ..model_utils import download_model
 from ..utils import pil2tensor, tensor2pil
 
-folder_paths.folder_names_and_paths["rembg"] = (
-    [os.path.join(folder_paths.models_dir, "rembg")],
-    folder_paths.supported_pt_extensions,
-)
 
 isnet = None
 gpu = model_management.get_torch_device()
@@ -69,13 +65,15 @@ def load_isnet_model(device_mode):
 
     if device_mode != "CPU":
         isnet = isnet.to(gpu)
+    else:
+        isnet = isnet.to(cpu)
 
     return isnet
 
 
-def unload_isnet():
+def unload_isnet(device_mode):
     global isnet
-    if isnet is not None and isnet.is_auto_mode:
+    if isnet is not None and device_mode == "AUTO":
         isnet = isnet.to(cpu)
 
     model_management.soft_empty_cache()
@@ -147,19 +145,22 @@ class ISNetSegment:
         model = load_isnet_model(device_mode)
         device = gpu if device_mode != "CPU" else cpu
 
-        segments = []
-        masks = []
-        for image in images:
-            im, im_orig_size = im_preprocess(image, cache_size)
-            mask = predict(model, im, im_orig_size, device)
-            mask = mask / 255.0
-            mask = np.clip(mask > threshold, 0, 1).astype(np.float32)
-            mask = torch.from_numpy(mask).float()
-            masks.append(mask)
+        try:
+            segments = []
+            masks = []
+            for image in images:
+                im, im_orig_size = im_preprocess(image, cache_size)
+                mask = predict(model, im, im_orig_size, device)
+                mask = mask / 255.0
+                mask = np.clip(mask > threshold, 0, 1).astype(np.float32)
+                mask = torch.from_numpy(mask).float()
+                masks.append(mask)
 
-            mask = tensor2pil(mask).convert("L")
-            cropped = tensor2pil(image).convert("RGB")
-            cropped.putalpha(mask)
-            segments.append(pil2tensor(cropped))
+                mask = tensor2pil(mask).convert("L")
+                cropped = tensor2pil(image).convert("RGB")
+                cropped.putalpha(mask)
+                segments.append(pil2tensor(cropped))
 
-        return (torch.cat(segments, dim=0), torch.stack(masks))
+            return (torch.cat(segments, dim=0), torch.stack(masks))
+        finally:
+            unload_isnet(device_mode)
