@@ -669,7 +669,6 @@ class UtilImageAlphaComposite:
             "required": {
                 "image_1": ("IMAGE",),
                 "image_2": ("IMAGE",),
-                "alpha": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0}),
             }
         }
 
@@ -677,7 +676,7 @@ class UtilImageAlphaComposite:
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "image_alpha_composite"
 
-    def image_alpha_composite(self, image_1: torch.Tensor, image_2: torch.Tensor, alpha):
+    def image_alpha_composite(self, image_1: torch.Tensor, image_2: torch.Tensor):
         if image_1.shape[0] != image_2.shape[0]:
             raise Exception("Images must have the same amount")
 
@@ -687,8 +686,8 @@ class UtilImageAlphaComposite:
         composited_images = []
         for i, im1 in enumerate(image_1):
             composited = Image.alpha_composite(
-                im1.convert("RGBA"),
-                image_2[i].convert("RGBA"),
+                tensor2pil(im1).convert("RGBA"),
+                tensor2pil(image_2[i]).convert("RGBA"),
             )
             composited_images.append(pil2tensor(composited))
 
@@ -759,6 +758,24 @@ class UtillQRCodeGenerator:
         return (pil2tensor(img),)
 
 
+class UtilRepeatImages:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "amount": ("INT", {"default": 1, "min": 1, "max": 1024}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "rebatch"
+
+    def rebatch(self, images: torch.Tensor, amount):
+        return (images.repeat(amount, 1, 1, 1),)
+
+
 class UtilSeedSelector:
     @classmethod
     def INPUT_TYPES(s):
@@ -793,6 +810,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleDownToTotalPixels": UtilImageScaleDownToTotalPixels,
     "ImageAlphaComposite": UtilImageAlphaComposite,
     "ImageGaussianBlur": UtilImageGaussianBlur,
+    "ImageRepeat": UtilRepeatImages,
     "QRCodeGenerator": UtillQRCodeGenerator,
     "DependenciesEdit": UtilDependenciesEdit,
     "AspectRatioSelector": UtilAspectRatioSelector,
@@ -819,6 +837,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleDownToTotalPixels": "Scale Down To Megapixels",
     "ImageAlphaComposite": "Image Alpha Composite",
     "ImageGaussianBlur": "Image Gaussian Blur",
+    "ImageRepeat": "Repeat Images",
     "QRCodeGenerator": "QR Code Generator",
     "DependenciesEdit": "Dependencies Edit",
     "AspectRatioSelector": "Aspect Ratio",

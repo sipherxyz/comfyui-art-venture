@@ -8,14 +8,20 @@ import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
 from ..model_utils import download_model
-from ..utils import is_junction, tensor2pil
+from ..utils import tensor2pil
 
-blip = None
+blips = {}
 blip_size = 384
 gpu = text_encoder_device()
 cpu = text_encoder_offload_device()
-BLIP_MODEL_URL = (
+model_url = (
     "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
+)
+model_dir = os.path.join(folder_paths.models_dir, "blip")
+
+folder_paths.folder_names_and_paths["blip"] = (
+    [model_dir],
+    folder_paths.supported_pt_extensions,
 )
 
 
@@ -63,44 +69,30 @@ def transformImage(input_image):
     return image.view(1, -1, blip_size, blip_size)  # Change the shape of the output tensor
 
 
-def load_blip(device_mode):
-    global blip
-    if blip is None:
-        blip_dir = os.path.join(folder_paths.models_dir, "blip")
-        if not os.path.exists(blip_dir) and not is_junction(blip_dir):
-            os.makedirs(blip_dir, exist_ok=True)
-
-        files = download_model(
-            model_path=blip_dir,
-            model_url=BLIP_MODEL_URL,
-            ext_filter=[".pth"],
-            download_name="model_base_caption_capfilt_large.pth",
-        )
+def load_blip(model_name):
+    if model_name not in blips:
+        blip_path = folder_paths.get_full_path("blip", model_name)
 
         from .models.blip import blip_decoder
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
         med_config = os.path.join(current_dir, "configs", "med_config.json")
         blip = blip_decoder(
-            pretrained=files[0],
+            pretrained=blip_path,
             image_size=blip_size,
             vit="base",
             med_config=med_config,
         )
         blip.eval()
+        blips[model_name] = blip
 
-    if device_mode != "CPU":
-        blip = blip.to(gpu)
-
-    blip.is_auto_mode = device_mode == "AUTO"
-
-    return blip
+    return blips[model_name]
 
 
 def unload_blip():
-    global blip
-    if blip is not None and blip.is_auto_mode:
-        blip = blip.to(cpu)
+    global blips
+    if blips is not None and blips.is_auto_mode:
+        blips = blips.to(cpu)
 
     soft_empty_cache()
 
@@ -113,10 +105,46 @@ def join_caption(caption, prefix, suffix):
     return caption
 
 
-class BlipCaption:
-    def __init__(self):
-        pass
+def blip_caption(model, image, min_length, max_length):
+    image = tensor2pil(image)
 
+    if "transformers==4.26.1" in packages(True):
+        print("Using Legacy `transformImaage()`")
+        tensor = transformImage_legacy(image)
+    else:
+        tensor = transformImage(image)
+
+    with torch.no_grad():
+        caption = model.generate(
+            tensor,
+            sample=False,
+            num_beams=1,
+            min_length=min_length,
+            max_length=max_length,
+        )
+        return caption[0]
+
+
+class BlipLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (folder_paths.get_filename_list("blip"),),
+            },
+        }
+
+    RETURN_TYPES = ("BLIP_MODEL",)
+    RETURN_NAMES = ("caption",)
+    FUNCTION = "load_blip"
+    CATEGORY = "Art Venture/Captioning"
+
+    def load_blip(self, model_name):
+        model = load_blip(model_name)
+        return (model,)
+
+
+class BlipCaption:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -146,21 +174,32 @@ class BlipCaption:
                 "prefix": ("STRING", {"default": ""}),
                 "suffix": ("STRING", {"default": ""}),
                 "enabled": ("BOOLEAN", {"default": True}),
+                "blip_model": ("BLIP_MODEL",),
             },
         }
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("caption",)
-
     FUNCTION = "blip_caption"
+    CATEGORY = "Art Venture/Captioning"
 
-    CATEGORY = "Art Venture/Utils"
-
-    def blip_caption(self, image, min_length, max_length, device_mode="AUTO", prefix="", suffix="", enabled=True):
+    def blip_caption(
+        self, image, min_length, max_length, device_mode="AUTO", prefix="", suffix="", enabled=True, blip_model=None
+    ):
         if not enabled:
             return (join_caption("", prefix, suffix),)
 
-        model = load_blip(device_mode)
+        if blip_model is None:
+            ckpts = folder_paths.get_filename_list("blip")
+            if len(ckpts) == 0:
+                ckpts = download_model(
+                    model_path=model_dir,
+                    model_url=model_url,
+                    ext_filter=[".pth"],
+                    download_name="model_base_caption_capfilt_large.pth",
+                )
+            blip_model = load_blip(ckpts[0])
+
         image = tensor2pil(image)
 
         if "transformers==4.26.1" in packages(True):
@@ -169,9 +208,14 @@ class BlipCaption:
         else:
             tensor = transformImage(image)
 
+        if device_mode != "CPU":
+            blip_model = blip_model.to(gpu)
+        else:
+            blip_model = blip_model.to(cpu)
+
         try:
             with torch.no_grad():
-                caption = model.generate(
+                caption = blip_model.generate(
                     tensor,
                     sample=False,
                     num_beams=1,
@@ -182,4 +226,5 @@ class BlipCaption:
         except:
             raise
         finally:
-            unload_blip()
+            if device_mode == "AUTO":
+                blip_model = blip_model.to(cpu)
