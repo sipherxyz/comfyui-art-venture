@@ -11,6 +11,8 @@ from PIL import Image, ImageOps, ImageFilter
 import numpy as np
 
 import folder_paths
+import comfy.utils
+from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel
 
 from .utils import pil2tensor, tensor2pil, ensure_package, get_dict_attribute
 
@@ -618,7 +620,7 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
             "required": {
                 "images": ("IMAGE",),
                 "size": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1}),
-                "mode": (["min", "max"], {"default": "max"}),
+                "mode": ("BOOLEAN", {"default": True, "label_on": "max", "label_off": "min"}),
             }
         }
 
@@ -630,36 +632,54 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
         width = images.shape[2]
         height = images.shape[1]
 
-        if mode == "min":
-            scale_by = size / min(width, height)
-        else:
+        if mode:
             scale_by = size / max(width, height)
+        else:
+            scale_by = size / min(width, height)
 
         scale_by = min(scale_by, 1.0)
         return self.image_scale_down_by(images, scale_by)
 
 
-class UtilImageScaleDownToTotalPixels(UtilImageScaleDownBy):
+class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "images": ("IMAGE",),
-                "megapixels": ("INT", {"default": 1, "min": 1, "max": 100}),
-            }
+                "megapixels": ("FLOAT", {"default": 1, "min": 0.1, "max": 100, "step": 0.05}),
+            },
+            "optional": {
+                "upscale_model_opt": ("UPSCALE_MODEL",),
+            },
         }
 
     RETURN_TYPES = ("IMAGE",)
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "image_scale_down_to_total_pixels"
 
-    def image_scale_down_to_total_pixels(self, images, megapixels):
+    def image_scale_up_by(self, images: torch.Tensor, scale_by, upscale_model_opt):
+        width = round(images.shape[2] * scale_by)
+        height = round(images.shape[1] * scale_by)
+
+        if scale_by < 1.2 or upscale_model_opt is None:
+            s = images.movedim(-1, 1)
+            s = comfy.utils.common_upscale(s, width, height, "bicubic", "disabled")
+            s = s.movedim(1, -1)
+            return (s,)
+        else:
+            s = self.upscale(upscale_model_opt, images)[0]
+            return self.image_scale_down(s, width, height, "center")
+
+    def image_scale_down_to_total_pixels(self, images, megapixels, upscale_model_opt=None):
         width = images.shape[2]
         height = images.shape[1]
         scale_by = np.sqrt((megapixels * 1024 * 1024) / (width * height))
-        scale_by = min(scale_by, 1.0)
 
-        return self.image_scale_down_by(images, scale_by)
+        if scale_by <= 1.0:
+            return self.image_scale_down_by(images, scale_by)
+        else:
+            return self.image_scale_up_by(images, scale_by, upscale_model_opt)
 
 
 class UtilImageAlphaComposite:
@@ -807,7 +827,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleDown": UtilImageScaleDown,
     "ImageScaleDownBy": UtilImageScaleDownBy,
     "ImageScaleDownToSize": UtilImageScaleDownToSize,
-    "ImageScaleDownToTotalPixels": UtilImageScaleDownToTotalPixels,
+    "ImageScaleToMegapixels": UtilImageScaleToTotalPixels,
     "ImageAlphaComposite": UtilImageAlphaComposite,
     "ImageGaussianBlur": UtilImageGaussianBlur,
     "ImageRepeat": UtilRepeatImages,
@@ -834,7 +854,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleDown": "Scale Down",
     "ImageScaleDownBy": "Scale Down By",
     "ImageScaleDownToSize": "Scale Down To Size",
-    "ImageScaleDownToTotalPixels": "Scale Down To Megapixels",
+    "ImageScaleToMegapixels": "Scale To Megapixels",
     "ImageAlphaComposite": "Image Alpha Composite",
     "ImageGaussianBlur": "Image Gaussian Blur",
     "ImageRepeat": "Repeat Images",
