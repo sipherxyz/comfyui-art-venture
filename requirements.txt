@@ -3,3 +3,5 @@ transformers
 fairscale
 pycocoevalcap
 opencv-python
+qrcode
+"qrcode[pil]"

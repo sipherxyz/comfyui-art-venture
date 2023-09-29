@@ -12,7 +12,7 @@ import numpy as np
 
 import folder_paths
 
-from .utils import pil2tensor, tensor2pil, get_dict_attribute
+from .utils import pil2tensor, tensor2pil, ensure_package, get_dict_attribute
 
 
 MAX_RESOLUTION = 8192
@@ -719,6 +719,46 @@ class UtilImageGaussianBlur:
         return (torch.cat(blured_images, dim=0),)
 
 
+class UtillQRCodeGenerator:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True}),
+                "size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
+                "qr_version": ("INT", {"default": 1, "min": 1, "max": 40, "step": 1}),
+                "error_correction": (["L", "M", "Q", "H"], {"default": "H"}),
+                "box_size": ("INT", {"default": 10, "min": 1, "max": 100, "step": 1}),
+                "border": ("INT", {"default": 4, "min": 0, "max": 100, "step": 1}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "create_qr_code"
+    CATEGORY = "Art Venture/Utils"
+
+    def create_qr_code(self, text, size, qr_version, error_correction, box_size, border):
+        ensure_package("qrcode", "qrcode[pil]")
+        import qrcode
+
+        if error_correction == "L":
+            error_level = qrcode.constants.ERROR_CORRECT_L
+        elif error_correction == "M":
+            error_level = qrcode.constants.ERROR_CORRECT_M
+        elif error_correction == "Q":
+            error_level = qrcode.constants.ERROR_CORRECT_Q
+        else:
+            error_level = qrcode.constants.ERROR_CORRECT_H
+
+        qr = qrcode.QRCode(version=qr_version, error_correction=error_level, box_size=box_size, border=border)
+        qr.add_data(text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        img = img.resize((size, size)).convert("RGB")
+
+        return (pil2tensor(img),)
+
+
 class UtilSeedSelector:
     @classmethod
     def INPUT_TYPES(s):
@@ -753,6 +793,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleDownToTotalPixels": UtilImageScaleDownToTotalPixels,
     "ImageAlphaComposite": UtilImageAlphaComposite,
     "ImageGaussianBlur": UtilImageGaussianBlur,
+    "QRCodeGenerator": UtillQRCodeGenerator,
     "DependenciesEdit": UtilDependenciesEdit,
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
@@ -778,6 +819,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleDownToTotalPixels": "Scale Down To Megapixels",
     "ImageAlphaComposite": "Image Alpha Composite",
     "ImageGaussianBlur": "Image Gaussian Blur",
+    "QRCodeGenerator": "QR Code Generator",
     "DependenciesEdit": "Dependencies Edit",
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",

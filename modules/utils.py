@@ -1,14 +1,34 @@
 import os
+import sys
 import time
 import torch
 import numpy as np
 import requests
 import traceback
+import importlib
+import subprocess
 from typing import Callable, Dict
 from PIL import Image
 
 from ..config import config
 from .logger import logger
+
+
+def ensure_package(package, install_package_name=None):
+    # Try to import the package
+    try:
+        importlib.import_module(package)
+    except ImportError:
+        logger.info(f"Package {package} is not installed. Installing now...")
+
+        if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
+            pip_install = [sys.executable, "-s", "-m", "pip", "install"]
+        else:
+            pip_install = [sys.executable, "-m", "pip", "install"]
+
+        subprocess.check_call(pip_install + [install_package_name or package])
+    else:
+        print(f"Package {package} is already installed.")
 
 
 def request_with_retry(
