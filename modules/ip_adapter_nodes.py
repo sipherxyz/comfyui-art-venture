@@ -11,11 +11,6 @@ from .utils import load_module
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
 ip_adapter_dir_names = ["IPAdapter", "IPAdapter-ComfyUI"]
 
-folder_paths.folder_names_and_paths["ip_adapter"] = (
-    [os.path.join(folder_paths.models_dir, "ip_adapter")],
-    folder_paths.supported_pt_extensions,
-)
-
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 
@@ -43,23 +38,17 @@ try:
     class AV_IPAdapter(IPAdapter):
         @classmethod
         def INPUT_TYPES(cls):
-            return {
-                "required": {
-                    "model": ("MODEL",),
-                    "image": ("IMAGE",),
-                    "weight": (
-                        "FLOAT",
-                        {"default": 1, "min": -1, "max": 3, "step": 0.05},
-                    ),
-                    "model_name": (folder_paths.get_filename_list("ip_adapter"),),
-                    "clip_name": (folder_paths.get_filename_list("clip_vision"),),
-                    "dtype": (["fp16", "fp32"],),
-                },
-                "optional": {
-                    "enabled": ("BOOLEAN", {"default": True}),
-                    "mask": ("MASK",),
-                },
+            inputs = IPAdapter.INPUT_TYPES()
+            inputs["required"].pop("clip_vision", None)
+            inputs["required"].pop("dtype", None)  # remove and reinsert
+            inputs["required"]["clip_name"] = (folder_paths.get_filename_list("clip_vision"),)
+            inputs["required"]["dtype"] = (["fp16", "fp32"],)
+            inputs["optional"] = {
+                "enabled": ("BOOLEAN", {"default": True}),
+                "mask": ("MASK",),
             }
+
+            return inputs
 
         CATEGORY = "Art Venture/Loaders"
         FUNCTION = "load_id_adapter"
@@ -71,7 +60,7 @@ try:
             clip_path = folder_paths.get_full_path("clip_vision", clip_name)
             clip_vision = comfy.clip_vision.load(clip_path)
 
-            return super().load_id_adapter(model, image, clip_vision, *args, **kwargs)
+            return super().adapter(model, image, clip_vision, *args, **kwargs)
 
     NODE_CLASS_MAPPINGS["AV_IPAdapter"] = AV_IPAdapter
     NODE_DISPLAY_NAME_MAPPINGS["AV_IPAdapter"] = "IP Adapter"
