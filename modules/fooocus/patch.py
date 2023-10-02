@@ -19,15 +19,7 @@ original_sdxl_encode_adm = comfy.model_base.SDXL.encode_adm
 
 
 def sampling_function_patched(
-    model_function,
-    x,
-    timestep,
-    uncond,
-    cond,
-    cond_scale,
-    cond_concat=None,
-    model_options={},
-    seed=None,
+    model_function, x, timestep, uncond, cond, cond_scale, cond_concat=None, model_options={}, seed=None
 ):
     def get_area_and_mult(cond, x_in, cond_concat_in, timestep_in):
         area = (x_in.shape[2], x_in.shape[3], 0, 0)
@@ -59,13 +51,8 @@ def sampling_function_patched(
             mask = cond[1]["mask"]
             assert mask.shape[1] == x_in.shape[2]
             assert mask.shape[2] == x_in.shape[3]
-            mask = (
-                mask[:, area[2] : area[0] + area[2], area[3] : area[1] + area[3]]
-                * mask_strength
-            )
-            mask = mask.unsqueeze(1).repeat(
-                input_x.shape[0] // mask.shape[0], input_x.shape[1], 1, 1
-            )
+            mask = mask[:, area[2] : area[0] + area[2], area[3] : area[1] + area[3]] * mask_strength
+            mask = mask.unsqueeze(1).repeat(input_x.shape[0] // mask.shape[0], input_x.shape[1], 1, 1)
         else:
             mask = torch.ones_like(input_x)
         mult = mask * strength
@@ -108,11 +95,9 @@ def sampling_function_patched(
             gligen_type = gligen[0]
             gligen_model = gligen[1]
             if gligen_type == "position":
-                gligen_patch = gligen_model.set_position(
-                    input_x.shape, gligen[2], input_x.device
-                )
+                gligen_patch = gligen_model.model.set_position(input_x.shape, gligen[2], input_x.device)
             else:
-                gligen_patch = gligen_model.set_empty(input_x.shape, input_x.device)
+                gligen_patch = gligen_model.model.set_empty(input_x.shape, input_x.device)
 
             patches["middle_patch"] = [gligen_patch]
 
@@ -185,9 +170,7 @@ def sampling_function_patched(
         c_crossattn_out = []
         for c in c_crossattn:
             if c.shape[1] < crossattn_max_len:
-                c = c.repeat(
-                    1, crossattn_max_len // c.shape[1], 1
-                )  # padding with repeat doesn't change result
+                c = c.repeat(1, crossattn_max_len // c.shape[1], 1)  # padding with repeat doesn't change result
             c_crossattn_out.append(c)
 
         if len(c_crossattn_out) > 0:
@@ -199,14 +182,7 @@ def sampling_function_patched(
         return out
 
     def calc_cond_uncond_batch(
-        model_function,
-        cond,
-        uncond,
-        x_in,
-        timestep,
-        max_total_area,
-        cond_concat_in,
-        model_options,
+        model_function, cond, uncond, x_in, timestep, max_total_area, cond_concat_in, model_options
     ):
         out_cond = torch.zeros_like(x_in)
         out_count = torch.ones_like(x_in) / 100000.0
@@ -245,10 +221,7 @@ def sampling_function_patched(
 
             for i in range(1, len(to_batch_temp) + 1):
                 batch_amount = to_batch_temp[: len(to_batch_temp) // i]
-                if (
-                    len(batch_amount) * first_shape[0] * first_shape[2] * first_shape[3]
-                    < max_total_area
-                ):
+                if len(batch_amount) * first_shape[0] * first_shape[2] * first_shape[3] < max_total_area:
                     to_batch = batch_amount
                     break
 
@@ -276,9 +249,7 @@ def sampling_function_patched(
             timestep_ = torch.cat([timestep] * batch_chunks)
 
             if control is not None:
-                c["control"] = control.get_control(
-                    input_x, timestep_, c, len(cond_or_uncond)
-                )
+                c["control"] = control.get_control(input_x, timestep_, c, len(cond_or_uncond))
 
             transformer_options = {}
             if "transformer_options" in model_options:
@@ -295,58 +266,32 @@ def sampling_function_patched(
                 else:
                     transformer_options["patches"] = patches
 
+            transformer_options["cond_or_uncond"] = cond_or_uncond[:]
+            transformer_options["uc_mask"] = torch.Tensor(cond_or_uncond).to(input_x).float()[:, None, None, None]
             c["transformer_options"] = transformer_options
-
-            transformer_options["uc_mask"] = (
-                torch.Tensor(cond_or_uncond).to(input_x).float()[:, None, None, None]
-            )
 
             if "model_function_wrapper" in model_options:
                 output = model_options["model_function_wrapper"](
-                    model_function,
-                    {
-                        "input": input_x,
-                        "timestep": timestep_,
-                        "c": c,
-                        "cond_or_uncond": cond_or_uncond,
-                    },
+                    model_function, {"input": input_x, "timestep": timestep_, "c": c, "cond_or_uncond": cond_or_uncond}
                 ).chunk(batch_chunks)
             else:
                 output = model_function(input_x, timestep_, **c).chunk(batch_chunks)
             del input_x
 
-            model_management.throw_exception_if_processing_interrupted()
-
             for o in range(batch_chunks):
                 if cond_or_uncond[o] == COND:
-                    out_cond[
-                        :,
-                        :,
-                        area[o][2] : area[o][0] + area[o][2],
-                        area[o][3] : area[o][1] + area[o][3],
-                    ] += (
+                    out_cond[:, :, area[o][2] : area[o][0] + area[o][2], area[o][3] : area[o][1] + area[o][3]] += (
                         output[o] * mult[o]
                     )
                     out_count[
-                        :,
-                        :,
-                        area[o][2] : area[o][0] + area[o][2],
-                        area[o][3] : area[o][1] + area[o][3],
+                        :, :, area[o][2] : area[o][0] + area[o][2], area[o][3] : area[o][1] + area[o][3]
                     ] += mult[o]
                 else:
-                    out_uncond[
-                        :,
-                        :,
-                        area[o][2] : area[o][0] + area[o][2],
-                        area[o][3] : area[o][1] + area[o][3],
-                    ] += (
+                    out_uncond[:, :, area[o][2] : area[o][0] + area[o][2], area[o][3] : area[o][1] + area[o][3]] += (
                         output[o] * mult[o]
                     )
                     out_uncond_count[
-                        :,
-                        :,
-                        area[o][2] : area[o][0] + area[o][2],
-                        area[o][3] : area[o][1] + area[o][3],
+                        :, :, area[o][2] : area[o][0] + area[o][2], area[o][3] : area[o][1] + area[o][3]
                     ] += mult[o]
             del mult
 
@@ -362,45 +307,24 @@ def sampling_function_patched(
         uncond = None
 
     cond, uncond = calc_cond_uncond_batch(
-        model_function,
-        cond,
-        uncond,
-        x,
-        timestep,
-        max_total_area,
-        cond_concat,
-        model_options,
+        model_function, cond, uncond, x, timestep, max_total_area, cond_concat, model_options
     )
     if "sampler_cfg_function" in model_options:
-        args = {
-            "cond": cond,
-            "uncond": uncond,
-            "cond_scale": cond_scale,
-            "timestep": timestep,
-        }
+        args = {"cond": cond, "uncond": uncond, "cond_scale": cond_scale, "timestep": timestep}
         return model_options["sampler_cfg_function"](args)
     else:
         return uncond + (cond - uncond) * cond_scale
 
 
 def unet_forward_patched(
-    self,
-    x,
-    timesteps=None,
-    context=None,
-    y=None,
-    control=None,
-    transformer_options={},
-    **kwargs
+    self, x, timesteps=None, context=None, y=None, control=None, transformer_options={}, **kwargs
 ):
     uc_mask = transformer_options["uc_mask"]
     transformer_options["original_shape"] = list(x.shape)
     transformer_options["current_index"] = 0
 
     hs = []
-    t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False).to(
-        self.dtype
-    )
+    t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False).to(self.dtype)
     emb = self.time_embed(t_emb)
 
     if self.num_classes is not None:
@@ -435,9 +359,7 @@ def unet_forward_patched(
             output_shape = hs[-1].shape
         else:
             output_shape = None
-        h = forward_timestep_embed(
-            module, h, emb, context, transformer_options, output_shape
-        )
+        h = forward_timestep_embed(module, h, emb, context, transformer_options, output_shape)
     h = h.type(x.dtype)
     x0 = self.out(h)
 
@@ -484,14 +406,10 @@ def sdxl_encode_adm_patched(self, **kwargs):
 def patch_all():
     comfy.samplers.sampling_function = sampling_function_patched
     comfy.model_base.SDXL.encode_adm = sdxl_encode_adm_patched
-    comfy.ldm.modules.diffusionmodules.openaimodel.UNetModel.forward = (
-        unet_forward_patched
-    )
+    comfy.ldm.modules.diffusionmodules.openaimodel.UNetModel.forward = unet_forward_patched
 
 
 def unpatch_all():
     comfy.samplers.sampling_function = original_sampling_function
     comfy.model_base.SDXL.encode_adm = original_sdxl_encode_adm
-    comfy.ldm.modules.diffusionmodules.openaimodel.UNetModel.forward = (
-        original_unet_forward
-    )
+    comfy.ldm.modules.diffusionmodules.openaimodel.UNetModel.forward = original_unet_forward
