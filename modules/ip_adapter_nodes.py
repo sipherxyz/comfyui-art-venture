@@ -53,8 +53,8 @@ try:
         CATEGORY = "Art Venture/Loaders"
         FUNCTION = "load_id_adapter"
 
-        def load_id_adapter(self, model, image, *args, apply=True, clip_name="None", **kwargs):
-            if not apply:
+        def load_id_adapter(self, model, image, *args, enabled=True, clip_name="None", **kwargs):
+            if not enabled:
                 return (model, None)
 
             clip_path = folder_paths.get_full_path("clip_vision", clip_name)
