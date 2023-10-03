@@ -819,6 +819,38 @@ class UtilSeedSelector:
         return (seed if mode == "random" else fixed_seed,)
 
 
+class UtilModelMerge:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model1": ("MODEL",),
+                "model2": ("MODEL",),
+                "ratio": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "merge_models"
+
+    def merge_models(self, model1, model2, ratio=1.0):
+        m = model1.clone()
+        kp = model2.get_key_patches("diffusion_model.")
+
+        for k in kp:
+            k_unet = k[len("diffusion_model.") :]
+            if k_unet == "input_blocks.0.0.weight":
+                w = kp[k][0]
+                if w.shape[1] == 9:
+                    w = w[:, 0:4, :, :]
+                m.add_patches({k: (w,)}, 1.0 - ratio, ratio)
+            else:
+                m.add_patches({k: kp[k]}, 1.0 - ratio, ratio)
+
+        return (m,)
+
+
 NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "LoadImageAsMaskFromUrl": UtilLoadImageAsMaskFromUrl,
@@ -845,6 +877,7 @@ NODE_CLASS_MAPPINGS = {
     "RandomInt": UtilRandomInt,
     "RandomFloat": UtilRandomFloat,
     "NumberScaler": UtilNumberScaler,
+    "MergeModels": UtilModelMerge,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -872,4 +905,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RandomInt": "Random Int",
     "RandomFloat": "Random Float",
     "NumberScaler": "Number Scaler",
+    "MergeModels": "Merge Models",
 }
