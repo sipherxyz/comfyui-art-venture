@@ -316,6 +316,31 @@ class UtilStringToInt:
         return (int(string),)
 
 
+class UtilStringToNumber:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "string": ("STRING", {"default": "0"}),
+                "rounding": (["round", "floor", "ceil"], {"default": "round"}),
+            },
+        }
+
+    RETURN_TYPES = ("INT", "FLOAT")
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "string_to_numbers"
+
+    def string_to_numbers(self, string: str, rounding):
+        f = float(string)
+
+        if rounding == "floor":
+            return (int(np.floor(f)), f)
+        elif rounding == "ceil":
+            return (int(np.ceil(f)), f)
+        else:
+            return (int(round(f)), f)
+
+
 class UtilNumberScaler:
     @classmethod
     def INPUT_TYPES(s):
@@ -855,6 +880,7 @@ NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "LoadImageAsMaskFromUrl": UtilLoadImageAsMaskFromUrl,
     "StringToInt": UtilStringToInt,
+    "StringToNumber": UtilStringToNumber,
     "ImageMuxer": UtilImageMuxer,
     "ImageScaleDown": UtilImageScaleDown,
     "ImageScaleDownBy": UtilImageScaleDownBy,
@@ -883,6 +909,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
     "LoadImageAsMaskFromUrl": "Load Image (as Mask) From URL",
     "StringToInt": "String to Int",
+    "StringToNumber": "String to Number",
     "ImageMuxer": "Image Muxer",
     "ImageScaleDown": "Scale Down",
     "ImageScaleDownBy": "Scale Down By",
