@@ -14,6 +14,7 @@ import comfy.utils
 
 from ..model_utils import download_model
 from ..utils import pil2tensor, tensor2pil
+from ..logger import logger
 
 
 isnets = {}
@@ -126,6 +127,7 @@ class ISNetLoader:
         return {
             "required": {
                 "model_name": (folder_paths.get_filename_list("isnet"),),
+                "model_override": ("STRING", {"default": "None"}),
             },
         }
 
@@ -133,7 +135,13 @@ class ISNetLoader:
     FUNCTION = "load_isnet"
     CATEGORY = "Art Venture/Segmentation"
 
-    def load_isnet(self, model_name):
+    def load_isnet(self, model_name, model_override="None"):
+        if model_override != "None":
+            if model_override not in folder_paths.get_filename_list("isnet"):
+                logger.warning(f"Model override {model_override} not found. Use {model_name} instead.")
+            else:
+                model_name = model_override
+
         model = load_isnet_model(model_name)
         return (model,)
 
