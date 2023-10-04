@@ -135,7 +135,6 @@ class BlipLoader:
         }
 
     RETURN_TYPES = ("BLIP_MODEL",)
-    RETURN_NAMES = ("caption",)
     FUNCTION = "load_blip"
     CATEGORY = "Art Venture/Captioning"
 
@@ -208,10 +207,8 @@ class BlipCaption:
         else:
             tensor = transformImage(image)
 
-        if device_mode != "CPU":
-            blip_model = blip_model.to(gpu)
-        else:
-            blip_model = blip_model.to(cpu)
+        device = gpu if device_mode != "CPU" else cpu
+        blip_model = blip_model.to(device)
 
         try:
             with torch.no_grad():

@@ -19,7 +19,7 @@ class GetSAMEmbedding:
         }
 
     RETURN_TYPES = ("SAM_EMBEDDING",)
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "Art Venture/Segmentation"
     FUNCTION = "get_sam_embedding"
 
     def get_sam_embedding(self, image, sam_model):
@@ -51,7 +51,7 @@ class SAMEmbeddingToImage:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "Art Venture/Segmentation"
     FUNCTION = "sam_embedding_to_noise_image"
 
     def sam_embedding_to_noise_image(self, embedding: np.ndarray):
