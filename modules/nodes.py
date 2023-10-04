@@ -85,7 +85,7 @@ class AVLoraLoader(LoraLoader):
 
     CATEGORY = "Art Venture/Loaders"
 
-    def load_lora(self, model, clip, lora_name, *args, lora_override="None", enabled=True):
+    def load_lora(self, model, clip, lora_name, *args, lora_override="None", enabled=True, **kwargs):
         if not enabled:
             return (model, clip)
 
@@ -95,7 +95,7 @@ class AVLoraLoader(LoraLoader):
             else:
                 lora_name = lora_override
 
-        return super().load_lora(model, clip, lora_name, *args)
+        return super().load_lora(model, clip, lora_name, *args, **kwargs)
 
 
 class AVOutputUploadImage:
