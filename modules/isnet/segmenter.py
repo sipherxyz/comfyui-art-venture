@@ -16,12 +16,17 @@ from ..model_utils import download_model
 from ..utils import pil2tensor, tensor2pil
 
 
-isnet = None
+isnets = {}
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
 model_dir = os.path.join(folder_paths.models_dir, "isnet")
 model_url = "https://huggingface.co/NimaBoscarino/IS-Net_DIS-general-use/resolve/main/isnet-general-use.pth"
 cache_size = [1024, 1024]
+
+folder_paths.folder_names_and_paths["isnet"] = (
+    [model_dir],
+    folder_paths.supported_pt_extensions,
+)
 
 
 class GOSNormalize(object):
@@ -37,19 +42,17 @@ class GOSNormalize(object):
 transform = transforms.Compose([GOSNormalize([0.5, 0.5, 0.5], [1.0, 1.0, 1.0])])
 
 
-def load_isnet_model(device_mode):
-    global isnet
-    if isnet is None:
-        files = download_model(
-            model_path=model_dir,
-            model_url=model_url,
-            ext_filter=[".pth"],
-            download_name="isnet-general-use.pth",
-        )
+def load_isnet_model(model_name):
+    if model_name not in isnets:
+        isnet_path = folder_paths.get_full_path("isnet", model_name)
+        state_dict = comfy.utils.load_torch_file(isnet_path)
 
-        from .models import ISNetDIS
+        from .models import ISNetBase, ISNetDIS
 
-        isnet = ISNetDIS()
+        if "side2.weight" in state_dict:
+            isnet = ISNetDIS()
+        else:
+            isnet = ISNetBase()
 
         # convert to half precision
         isnet.is_fp16 = model_management.should_use_fp16()
@@ -59,24 +62,11 @@ def load_isnet_model(device_mode):
                 if isinstance(layer, nn.BatchNorm2d):
                     layer.float()
 
-        state_dict = comfy.utils.load_torch_file(files[0])
         isnet.load_state_dict(state_dict)
         isnet.eval()
+        isnets[model_name] = isnet
 
-    if device_mode != "CPU":
-        isnet = isnet.to(gpu)
-    else:
-        isnet = isnet.to(cpu)
-
-    return isnet
-
-
-def unload_isnet(device_mode):
-    global isnet
-    if isnet is not None and device_mode == "AUTO":
-        isnet = isnet.to(cpu)
-
-    model_management.soft_empty_cache()
+    return isnets[model_name]
 
 
 def im_preprocess(im: torch.Tensor, size):
@@ -105,10 +95,19 @@ def predict(model, image: torch.Tensor, orig_size, device):
         image = image.type(torch.FloatTensor)
 
     image_v = Variable(image, requires_grad=False).to(device)
-    ds_val = model(image_v)[0]  # list of 6 results
+    ds_val = model(image_v)  # list of 6 results
+
+    if isinstance(ds_val, tuple):
+        ds_val = ds_val[0]
+
+    if isinstance(ds_val, list):
+        ds_val = ds_val[0]
+
+    if len(ds_val.shape) < 4:
+        ds_val = torch.unsqueeze(ds_val, 0)
 
     # B x 1 x H x W    # we want the first one which is the most accurate prediction
-    pred_val = ds_val[0][0, :, :, :]
+    pred_val = ds_val[0, :, :, :]
 
     # recover the prediction spatial size to the orignal image size
     pred_val = torch.squeeze(F.upsample(torch.unsqueeze(pred_val, 0), (orig_size[0], orig_size[1]), mode="bilinear"))
@@ -121,6 +120,24 @@ def predict(model, image: torch.Tensor, orig_size, device):
     return (pred_val.detach().cpu().numpy() * 255).astype(np.uint8)
 
 
+class ISNetLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (folder_paths.get_filename_list("isnet"),),
+            },
+        }
+
+    RETURN_TYPES = ("ISNET_MODEL",)
+    FUNCTION = "load_isnet"
+    CATEGORY = "Art Venture/Segmentation"
+
+    def load_isnet(self, model_name):
+        model = load_isnet_model(model_name)
+        return (model,)
+
+
 class ISNetSegment:
     @classmethod
     def INPUT_TYPES(s):
@@ -129,28 +146,43 @@ class ISNetSegment:
                 "images": ("IMAGE",),
                 "threshold": ("FLOAT", {"default": 0.5, "min": 0, "max": 1, "step": 0.001}),
             },
-            "optional": {"device_mode": (["AUTO", "Prefer GPU", "CPU"],), "enabled": ("BOOLEAN", {"default": True})},
+            "optional": {
+                "device_mode": (["AUTO", "Prefer GPU", "CPU"],),
+                "enabled": ("BOOLEAN", {"default": True}),
+                "isnet_model": ("ISNET_MODEL",),
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
     RETURN_NAMES = ("segmented", "mask")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "Art Venture/Segmentation"
     FUNCTION = "segment_isnet"
 
-    def segment_isnet(self, images: torch.Tensor, threshold, device_mode="AUTO", enabled=True):
+    def segment_isnet(self, images: torch.Tensor, threshold, device_mode="AUTO", enabled=True, isnet_model=None):
         if not enabled:
             masks = torch.zeros((len(images), 64, 64), dtype=torch.float32)
             return (images, masks)
 
-        model = load_isnet_model(device_mode)
+        if isnet_model is None:
+            ckpts = folder_paths.get_filename_list("blip")
+            if len(ckpts) == 0:
+                ckpts = download_model(
+                    model_path=model_dir,
+                    model_url=model_url,
+                    ext_filter=[".pth"],
+                    download_name="isnet-general-use.pth",
+                )
+            isnet_model = load_isnet_model(ckpts[0])
+
         device = gpu if device_mode != "CPU" else cpu
+        isnet_model = isnet_model.to(device)
 
         try:
             segments = []
             masks = []
             for image in images:
                 im, im_orig_size = im_preprocess(image, cache_size)
-                mask = predict(model, im, im_orig_size, device)
+                mask = predict(isnet_model, im, im_orig_size, device)
                 mask = mask / 255.0
                 mask = np.clip(mask > threshold, 0, 1).astype(np.float32)
                 mask = torch.from_numpy(mask).float()
@@ -163,4 +195,5 @@ class ISNetSegment:
 
             return (torch.cat(segments, dim=0), torch.stack(masks))
         finally:
-            unload_isnet(device_mode)
+            if device_mode == "AUTO":
+                isnet_model = isnet_model.to(cpu)

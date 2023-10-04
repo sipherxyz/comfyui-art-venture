@@ -369,116 +369,9 @@ class RSU4F(nn.Module):
         return hx1d + hxin
 
 
-class myrebnconv(nn.Module):
-    def __init__(self, in_ch=3, out_ch=1, kernel_size=3, stride=1, padding=1, dilation=1, groups=1):
-        super(myrebnconv, self).__init__()
-
-        self.conv = nn.Conv2d(
-            in_ch, out_ch, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=groups
-        )
-        self.bn = nn.BatchNorm2d(out_ch)
-        self.rl = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        return self.rl(self.bn(self.conv(x)))
-
-
-class ISNetGTEncoder(nn.Module):
-    def __init__(self, in_ch=1, out_ch=1):
-        super(ISNetGTEncoder, self).__init__()
-
-        self.conv_in = myrebnconv(in_ch, 16, 3, stride=2, padding=1)  # nn.Conv2d(in_ch,64,3,stride=2,padding=1)
-
-        self.stage1 = RSU7(16, 16, 64)
-        self.pool12 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage2 = RSU6(64, 16, 64)
-        self.pool23 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage3 = RSU5(64, 32, 128)
-        self.pool34 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage4 = RSU4(128, 32, 256)
-        self.pool45 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage5 = RSU4F(256, 64, 512)
-        self.pool56 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
-
-        self.stage6 = RSU4F(512, 64, 512)
-
-        self.side1 = nn.Conv2d(64, out_ch, 3, padding=1)
-        self.side2 = nn.Conv2d(64, out_ch, 3, padding=1)
-        self.side3 = nn.Conv2d(128, out_ch, 3, padding=1)
-        self.side4 = nn.Conv2d(256, out_ch, 3, padding=1)
-        self.side5 = nn.Conv2d(512, out_ch, 3, padding=1)
-        self.side6 = nn.Conv2d(512, out_ch, 3, padding=1)
-
-    def compute_loss(self, preds, targets):
-        return muti_loss_fusion(preds, targets)
-
-    def forward(self, x):
-        hx = x
-
-        hxin = self.conv_in(hx)
-        # hx = self.pool_in(hxin)
-
-        # stage 1
-        hx1 = self.stage1(hxin)
-        hx = self.pool12(hx1)
-
-        # stage 2
-        hx2 = self.stage2(hx)
-        hx = self.pool23(hx2)
-
-        # stage 3
-        hx3 = self.stage3(hx)
-        hx = self.pool34(hx3)
-
-        # stage 4
-        hx4 = self.stage4(hx)
-        hx = self.pool45(hx4)
-
-        # stage 5
-        hx5 = self.stage5(hx)
-        hx = self.pool56(hx5)
-
-        # stage 6
-        hx6 = self.stage6(hx)
-
-        # side output
-        d1 = self.side1(hx1)
-        d1 = _upsample_like(d1, x)
-
-        d2 = self.side2(hx2)
-        d2 = _upsample_like(d2, x)
-
-        d3 = self.side3(hx3)
-        d3 = _upsample_like(d3, x)
-
-        d4 = self.side4(hx4)
-        d4 = _upsample_like(d4, x)
-
-        d5 = self.side5(hx5)
-        d5 = _upsample_like(d5, x)
-
-        d6 = self.side6(hx6)
-        d6 = _upsample_like(d6, x)
-
-        # d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6),1))
-
-        return [F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)], [
-            hx1,
-            hx2,
-            hx3,
-            hx4,
-            hx5,
-            hx6,
-        ]
-
-
-class ISNetDIS(nn.Module):
+class ISNetBase(nn.Module):
     def __init__(self, in_ch=3, out_ch=1):
-        super(ISNetDIS, self).__init__()
+        super(ISNetBase, self).__init__()
 
         self.conv_in = nn.Conv2d(in_ch, 64, 3, stride=2, padding=1)
         self.pool_in = nn.MaxPool2d(2, stride=2, ceil_mode=True)
@@ -508,21 +401,6 @@ class ISNetDIS(nn.Module):
         self.stage1d = RSU7(128, 16, 64)
 
         self.side1 = nn.Conv2d(64, out_ch, 3, padding=1)
-        self.side2 = nn.Conv2d(64, out_ch, 3, padding=1)
-        self.side3 = nn.Conv2d(128, out_ch, 3, padding=1)
-        self.side4 = nn.Conv2d(256, out_ch, 3, padding=1)
-        self.side5 = nn.Conv2d(512, out_ch, 3, padding=1)
-        self.side6 = nn.Conv2d(512, out_ch, 3, padding=1)
-
-        # self.outconv = nn.Conv2d(6*out_ch,out_ch,1)
-
-    def compute_loss_kl(self, preds, targets, dfs, fs, mode="MSE"):
-        # return muti_loss_fusion(preds,targets)
-        return muti_loss_fusion_kl(preds, targets, dfs, fs, mode=mode)
-
-    def compute_loss(self, preds, targets):
-        # return muti_loss_fusion(preds,targets)
-        return muti_loss_fusion(preds, targets)
 
     def forward(self, x):
         hx = x
@@ -573,28 +451,4 @@ class ISNetDIS(nn.Module):
         d1 = self.side1(hx1d)
         d1 = _upsample_like(d1, x)
 
-        d2 = self.side2(hx2d)
-        d2 = _upsample_like(d2, x)
-
-        d3 = self.side3(hx3d)
-        d3 = _upsample_like(d3, x)
-
-        d4 = self.side4(hx4d)
-        d4 = _upsample_like(d4, x)
-
-        d5 = self.side5(hx5d)
-        d5 = _upsample_like(d5, x)
-
-        d6 = self.side6(hx6)
-        d6 = _upsample_like(d6, x)
-
-        # d0 = self.outconv(torch.cat((d1,d2,d3,d4,d5,d6),1))
-
-        return [F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)], [
-            hx1d,
-            hx2d,
-            hx3d,
-            hx4d,
-            hx5d,
-            hx6,
-        ]
+        return d1.sigmoid()

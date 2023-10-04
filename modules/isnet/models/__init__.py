@@ -1,1 +1,2 @@
-from .isnet import ISNetGTEncoder, ISNetDIS
+from .isnet import ISNetBase
+from .isnet_dis import ISNetDIS
