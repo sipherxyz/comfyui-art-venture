@@ -6,7 +6,6 @@ from torch import nn
 from torch.autograd import Variable
 from torchvision import transforms
 from torchvision.transforms.functional import normalize
-from PIL import Image
 
 import folder_paths
 import comfy.model_management as model_management

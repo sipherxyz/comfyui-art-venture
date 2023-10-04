@@ -763,6 +763,84 @@ class UtilImageGaussianBlur:
         return (torch.cat(blured_images, dim=0),)
 
 
+class UtilImageExtractChannel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "channel": (["R", "G", "B", "A"],),
+            }
+        }
+
+    RETURN_TYPES = ("MASK",)
+    RETURN_NAMES = ("channel_data",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_extract_alpha"
+
+    def image_extract_alpha(self, images: torch.Tensor, channel):
+        # images in shape (N, H, W, C)
+
+        if len(images.shape) < 4:
+            images = images.unsqueeze(0)
+
+        if channel == "A" and images.shape[3] < 4:
+            raise Exception("Image does not have an alpha channel")
+
+        channel_images = []
+        for image in images:
+            if channel == "A":
+                channel_data = image[:, :, 3].cpu().clone()
+            elif channel == "R":
+                channel_data = image[:, :, 0].cpu().clone()
+            elif channel == "G":
+                channel_data = image[:, :, 1].cpu().clone()
+            else:
+                channel_data = image[:, :, 2].cpu().clone()
+
+            channel_images.append(channel_data)
+
+        return (torch.stack(channel_images),)
+
+
+class UtilImageApplyChannel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "channel_data": ("MASK",),
+                "channel": (["R", "G", "B", "A"],),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "image_apply_channel"
+
+    def image_apply_channel(self, images: torch.Tensor, channel_data: torch.Tensor, channel):
+        merged_images = []
+
+        for image in images:
+            image = image.cpu().clone()
+
+            if channel == "A":
+                if image.shape[2] < 4:
+                    image = torch.cat([image, torch.ones((image.shape[0], image.shape[1], 1))], dim=2)
+                
+                image[:, :, 3] = channel_data
+            elif channel == "R":
+                image[:, :, 0] = channel_data
+            elif channel == "G":
+                image[:, :, 1] = channel_data
+            else:
+                image[:, :, 2] = channel_data
+
+            merged_images.append(image)
+
+        return (torch.stack(merged_images),)
+
+
 class UtillQRCodeGenerator:
     @classmethod
     def INPUT_TYPES(cls):
@@ -889,6 +967,8 @@ NODE_CLASS_MAPPINGS = {
     "ImageAlphaComposite": UtilImageAlphaComposite,
     "ImageGaussianBlur": UtilImageGaussianBlur,
     "ImageRepeat": UtilRepeatImages,
+    "ImageExtractChannel": UtilImageExtractChannel,
+    "ImageApplyChannel": UtilImageApplyChannel,
     "QRCodeGenerator": UtillQRCodeGenerator,
     "DependenciesEdit": UtilDependenciesEdit,
     "AspectRatioSelector": UtilAspectRatioSelector,
@@ -918,6 +998,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageAlphaComposite": "Image Alpha Composite",
     "ImageGaussianBlur": "Image Gaussian Blur",
     "ImageRepeat": "Repeat Images",
+    "ImageExtractChannel": "Image Extract Channel",
+    "ImageApplyChannel": "Image Apply Channel",
     "QRCodeGenerator": "QR Code Generator",
     "DependenciesEdit": "Dependencies Edit",
     "AspectRatioSelector": "Aspect Ratio",
