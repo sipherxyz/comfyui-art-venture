@@ -77,19 +77,25 @@ class AVLoraLoader(LoraLoader):
     @classmethod
     def INPUT_TYPES(s):
         inputs = LoraLoader.INPUT_TYPES()
-        inputs["optional"] = {"lora_override": ("STRING", {"default": "None"})}
+        inputs["optional"] = {
+            "lora_override": ("STRING", {"default": "None"}),
+            "enabled": ("BOOLEAN", {"default": True}),
+        }
         return inputs
 
     CATEGORY = "Art Venture/Loaders"
 
-    def load_lora(self, lora_name, lora_override="None"):
+    def load_lora(self, model, clip, lora_name, *args, lora_override="None", enabled=True):
+        if not enabled:
+            return (model, clip)
+
         if lora_override != "None":
             if lora_override not in folder_paths.get_filename_list("loras"):
                 print(f"Warning: Not found Lora model {lora_override}. Use {lora_name} instead.")
             else:
                 lora_name = lora_override
 
-        return super().load_lora(lora_name)
+        return super().load_lora(model, clip, lora_name, *args)
 
 
 class AVOutputUploadImage:
