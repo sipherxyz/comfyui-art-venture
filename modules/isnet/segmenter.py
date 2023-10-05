@@ -171,7 +171,7 @@ class ISNetSegment:
             return (images, masks)
 
         if isnet_model is None:
-            ckpts = folder_paths.get_filename_list("blip")
+            ckpts = folder_paths.get_filename_list("isnet")
             if len(ckpts) == 0:
                 ckpts = download_model(
                     model_path=model_dir,
