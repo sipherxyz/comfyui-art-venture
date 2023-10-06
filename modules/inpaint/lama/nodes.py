@@ -21,6 +21,8 @@ model_url = "https://github.com/Sanster/models/releases/download/add_big_lama/bi
 
 
 def load_lama_model(device_mode):
+    device = gpu if device_mode != "CPU" else cpu
+
     global lama
     if lama is None:
         files = download_model(
@@ -32,14 +34,9 @@ def load_lama_model(device_mode):
 
         from .models.lama import LaMa
 
-        device = gpu if device_mode != "CPU" else cpu
         lama = LaMa(device, model_path=files[0])
 
-    if device_mode != "CPU":
-        lama = lama.to(gpu)
-    else:
-        lama = lama.to(cpu)
-
+    lama = lama.to(device)
     return lama
 
 
