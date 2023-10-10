@@ -190,6 +190,37 @@ class AVControlNetEfficientStacker:
         return (cnet_stack,)
 
 
+class AVControlNetEfficientStackerSimple(AVControlNetEfficientStacker):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "control_net_name": (["None"] + s.controlnets,),
+                "image": ("IMAGE",),
+                "strength": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01},
+                ),
+                "preprocessor": (["None"] + s.preprocessors,),
+            },
+            "optional": {
+                "cnet_stack": ("CONTROL_NET_STACK",),
+                "control_net_override": ("STRING", {"default": "None"}),
+                "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
+                "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+            },
+        }
+
+    FUNCTION = "control_net_stacker_simple"
+
+    def control_net_stacker_simple(
+        self,
+        *args,
+        **kwargs,
+    ):
+        return self.control_net_stacker(*args, start_percent=0.0, end_percent=1.0, **kwargs)
+
+
 class AVControlNetEfficientLoader(ControlNetApply):
     controlnets = folder_paths.get_filename_list("controlnet")
     preprocessors = list(control_net_preprocessors.keys())
@@ -298,13 +329,15 @@ NODE_CLASS_MAPPINGS = {
     "AV_ControlNetEfficientLoader": AVControlNetEfficientLoader,
     "AV_ControlNetEfficientLoaderAdvanced": AVControlNetEfficientLoaderAdvanced,
     "AV_ControlNetEfficientStacker": AVControlNetEfficientStacker,
+    "AV_ControlNetEfficientStackerSimple": AVControlNetEfficientStackerSimple,
     "AV_ControlNetPreprocessor": AV_ControlNetPreprocessor,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetLoader": "ControlNet Loader",
-    "AV_ControlNetEfficientLoader": "ControlNet Loader (Efficient)",
-    "AV_ControlNetEfficientLoaderAdvanced": "ControlNet Loader Adv. (Efficient)",
-    "AV_ControlNetEfficientStacker": "ControlNet Stacker (Efficient)",
+    "AV_ControlNetEfficientLoader": "ControlNet Loader",
+    "AV_ControlNetEfficientLoaderAdvanced": "ControlNet Loader Adv.",
+    "AV_ControlNetEfficientStacker": "ControlNet Stacker Adv.",
+    "AV_ControlNetEfficientStackerSimple": "ControlNet Stacker",
     "AV_ControlNetPreprocessor": "ControlNet Preprocessor",
 }

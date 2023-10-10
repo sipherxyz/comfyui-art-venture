@@ -41,9 +41,6 @@ class SAMLoader:
             model_kind = "vit_b"
 
         sam = sam_model_registry[model_kind]()
-        if model_management.should_use_fp16():
-            sam.half()
-
         sam.load_state_dict(state_dict)
 
         return (sam,)

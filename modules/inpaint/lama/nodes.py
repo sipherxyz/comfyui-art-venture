@@ -9,7 +9,6 @@ import comfy.model_management as model_management
 from ...utils import tensor2pil
 from ...image_utils import extract_img, dilate_mask
 from ...model_utils import download_model
-from .models.lama import LaMa
 from .schema import Config
 
 
