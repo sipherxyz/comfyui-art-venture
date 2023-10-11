@@ -1,5 +1,5 @@
 from .sam.nodes import SAMLoader, GetSAMEmbedding, SAMEmbeddingToImage
-from .lama.nodes import LaMaInpaint
+from .lama import LaMaInpaint
 
 NODE_CLASS_MAPPINGS = {
     "AV_SAMLoader": SAMLoader,

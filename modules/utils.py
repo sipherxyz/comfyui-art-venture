@@ -7,6 +7,7 @@ import requests
 import traceback
 import importlib
 import subprocess
+import torch.nn.functional as F
 from typing import Callable, Dict
 from PIL import Image
 
