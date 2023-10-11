@@ -9,6 +9,7 @@ import folder_paths
 import comfy.model_management as model_management
 
 from ...model_utils import download_model
+from ...utils import tensor2pil
 
 
 lama = None
@@ -50,7 +51,7 @@ def load_model():
         cfg.visualizer.kind = "noop"
 
         lama = load_checkpoint(cfg, files[0], strict=False, map_location="cpu")
-        lama.eval()
+        lama.freeze()
 
     return lama
 
@@ -90,11 +91,14 @@ class LaMaInpaint:
             orig_h = image.shape[1]
 
             for i, img in enumerate(image):
+                img = img.permute(2, 0, 1).unsqueeze(0)
+                msk = mask[i].detach().cpu()
+                msk = (msk > 0) * 1.0
+                msk = msk.unsqueeze(0).unsqueeze(0)
+
                 batch = {}
-                batch["image"] = img.permute(2, 0, 1).unsqueeze(0)
-                batch["mask"] = mask[i].cpu().unsqueeze(0).unsqueeze(0)
-                batch["image"] = pad_tensor_to_modulo(batch["image"], 8).to(device)
-                batch["mask"] = pad_tensor_to_modulo(batch["mask"], 8).to(device)
+                batch["image"] = pad_tensor_to_modulo(img, 8).to(device)
+                batch["mask"] = pad_tensor_to_modulo(msk, 8).to(device)
 
                 res = model(batch)
                 res = batch["inpainted"][0].permute(1, 2, 0)
