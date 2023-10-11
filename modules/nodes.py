@@ -1,5 +1,6 @@
 import io
 import json
+import torch
 from typing import Dict
 
 from PIL import Image
@@ -7,7 +8,9 @@ from PIL.PngImagePlugin import PngInfo
 import numpy as np
 
 import folder_paths
+import comfy.sd
 from nodes import LoraLoader, VAELoader
+from comfy_extras.nodes_model_merging import CheckpointSave
 
 from .logger import logger
 from .utils import upload_to_av
@@ -324,6 +327,83 @@ class AVParametersPipeToPrompts:
         )
 
 
+class AVCheckpointMerge:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model1": ("MODEL",),
+                "model2": ("MODEL",),
+                "model1_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "model2_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
+            }
+        }
+
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "merge"
+
+    CATEGORY = "Art Venture/Model Merging"
+
+    def merge(self, model1, model2, model1_weight, model2_weight):
+        m = model1.clone()
+        k1 = model1.get_key_patches("diffusion_model.")
+        k2 = model2.get_key_patches("diffusion_model.")
+        for k in k1:
+            if k in k2:
+                a = k1[k][0]
+                b = k2[k][0]
+
+                if a.shape != b.shape and a.shape[0:1] + a.shape[2:] == b.shape[0:1] + b.shape[2:]:
+                    if a.shape[1] == 4 and b.shape[1] == 9:
+                        raise RuntimeError(
+                            "When merging inpainting model with a normal one, model1 must be the inpainting model."
+                        )
+                    if a.shape[1] == 4 and b.shape[1] == 8:
+                        raise RuntimeError(
+                            "When merging instruct-pix2pix model with a normal one, model1 must be the instruct-pix2pix model."
+                        )
+
+                    c = torch.zeros_like(a)
+                    c[:, 0:4, :, :] = b
+                    b = c
+
+                m.add_patches({k: (b,)}, model2_weight, model1_weight)
+            else:
+                logger.warn(f"Key {k} not found in model2")
+                m.add_patches({k: k1[k]}, -1.0, 1.0)  # zero out
+
+        return (m,)
+
+
+class AVCheckpointSave(CheckpointSave):
+    CATEGORY = "Art Venture/Model Merging"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        inputs = CheckpointSave.INPUT_TYPES()
+        inputs["optional"] = {
+            "dtype": (["float16", "float32"], {"default": "float16"}),
+        }
+
+        return inputs
+
+    def save(self, *args, dtype="float16", **kwargs):
+        comfy_save_checkpoint = comfy.sd.save_checkpoint
+
+        if dtype == "float16":
+
+            def save_checkpoint(output_path, model, clip, vae, metadata=None):
+                model.model.half()
+                return comfy_save_checkpoint(output_path, model, clip, vae, metadata)
+
+            comfy.sd.save_checkpoint = save_checkpoint
+
+        try:
+            return super().save(*args, **kwargs)
+        finally:
+            comfy.sd.save_checkpoint = comfy_save_checkpoint
+
+
 NODE_CLASS_MAPPINGS = {
     "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
@@ -332,6 +412,8 @@ NODE_CLASS_MAPPINGS = {
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
     "AV_VAELoader": AVVAELoader,
     "AV_LoraLoader": AVLoraLoader,
+    "AV_CheckpointMerge": AVCheckpointMerge,
+    "AV_CheckpointSave": AVCheckpointSave,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_UploadImage": "Upload to Art Venture",
@@ -341,6 +423,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
     "AV_VAELoader": "VAE Loader",
     "AV_LoraLoader": "Lora Loader",
+    "AV_CheckpointMerge": "Checkpoint Merge",
+    "AV_CheckpointSave": "Checkpoint Save",
 }
 
 
