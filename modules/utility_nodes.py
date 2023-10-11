@@ -782,25 +782,15 @@ class UtilImageExtractChannel:
         # images in shape (N, H, W, C)
 
         if len(images.shape) < 4:
-            images = images.unsqueeze(0)
+            images = images.unsqueeze(3).repeat(1, 1, 1, 3)
 
         if channel == "A" and images.shape[3] < 4:
             raise Exception("Image does not have an alpha channel")
 
-        channel_images = []
-        for image in images:
-            if channel == "A":
-                channel_data = image[:, :, 3].cpu().clone()
-            elif channel == "R":
-                channel_data = image[:, :, 0].cpu().clone()
-            elif channel == "G":
-                channel_data = image[:, :, 1].cpu().clone()
-            else:
-                channel_data = image[:, :, 2].cpu().clone()
+        channel_index = ["R", "G", "B", "A"].index(channel)
+        mask = images[:, :, :, channel_index].cpu().clone()
 
-            channel_images.append(channel_data)
-
-        return (torch.stack(channel_images),)
+        return (mask,)
 
 
 class UtilImageApplyChannel:
