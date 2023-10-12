@@ -58,7 +58,7 @@ from .inpaint import (
 )
 
 from .model_utils import load_file_from_url
-lora_cloud_front_url = "https://d2lae7oxvyyfdd.cloudfront.net"
+lora_cloud_front_url = "https://d111kwgh87c0gj.cloudfront.net"
 
 class AVVAELoader(VAELoader):
     @classmethod
