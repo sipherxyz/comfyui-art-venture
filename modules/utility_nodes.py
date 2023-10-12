@@ -279,7 +279,7 @@ class UtilRandomInt:
 
     @classmethod
     def IS_CHANGED(s, *args, **kwargs):
-        return torch.rand(1)
+        return torch.rand(1).item()
 
     def random_int(self, min: int, max: int):
         num = torch.randint(min, max, (1,)).item()
@@ -302,7 +302,7 @@ class UtilRandomFloat:
 
     @classmethod
     def IS_CHANGED(s, *args, **kwargs):
-        return torch.rand(1)
+        return torch.rand(1).item()
 
     def random_float(self, min: float, max: float):
         num = torch.rand(1).item() * (max - min) + min
