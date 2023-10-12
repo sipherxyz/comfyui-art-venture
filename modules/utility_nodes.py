@@ -277,6 +277,10 @@ class UtilRandomInt:
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "random_int"
 
+    @classmethod
+    def IS_CHANGED(s, *args, **kwargs):
+        return torch.rand(1)
+
     def random_int(self, min: int, max: int):
         num = torch.randint(min, max, (1,)).item()
         return (num, str(num))
@@ -295,6 +299,10 @@ class UtilRandomFloat:
     RETURN_TYPES = ("FLOAT", "STRING")
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "random_float"
+
+    @classmethod
+    def IS_CHANGED(s, *args, **kwargs):
+        return torch.rand(1)
 
     def random_float(self, min: float, max: float):
         num = torch.rand(1).item() * (max - min) + min
@@ -817,7 +825,7 @@ class UtilImageApplyChannel:
             if channel == "A":
                 if image.shape[2] < 4:
                     image = torch.cat([image, torch.ones((image.shape[0], image.shape[1], 1))], dim=2)
-                
+
                 image[:, :, 3] = channel_data
             elif channel == "R":
                 image[:, :, 0] = channel_data
