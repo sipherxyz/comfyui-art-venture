@@ -92,8 +92,8 @@ class UtilLoadImageFromUrl:
             image.paste(i, mask=alpha)
             image.putalpha(alpha)
 
-        if not keep_alpha_channel and has_alpha:
-            image = i.convert("RGB")
+            if not keep_alpha_channel:
+                image = image.convert("RGB")
         else:
             image = i
 
