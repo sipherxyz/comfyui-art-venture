@@ -1,3 +1,4 @@
+import os
 import io
 import json
 import torch
@@ -56,6 +57,8 @@ from .inpaint import (
     NODE_DISPLAY_NAME_MAPPINGS as INPAINT_NODE_DISPLAY_NAME_MAPPINGS,
 )
 
+from .model_utils import load_file_from_url
+lora_cloud_front_url = "https://d111kwgh87c0gj.cloudfront.net"
 
 class AVVAELoader(VAELoader):
     @classmethod
@@ -100,6 +103,68 @@ class AVLoraLoader(LoraLoader):
 
         return super().load_lora(model, clip, lora_name, *args, **kwargs)
 
+class AVLoraListLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "model": ("MODEL",),
+                              "clip": ("CLIP", ),
+                              "data": ("STRING", {"default": "","multiline": True}),
+                              }}
+    RETURN_TYPES = ("MODEL", "CLIP")
+    FUNCTION = "load_list_lora"
+
+    CATEGORY = "Art Venture/Loaders"
+
+    def load_list_lora(self, model, clip, data):
+        # data is a list of lora model (lora_name, strength_model, strength_clip) in json format
+        # trim data
+        data = data.strip()
+        
+        if data == "" or data == "[]" or data is None:
+            return (model, clip)
+
+        print(f"Loading lora list: {data}")
+
+        lora_list = json.loads(data)
+
+        if len(lora_list) == 0:
+            return (model, clip)
+        
+        lora_params = []
+        
+        for lora in lora_list:
+            lora_name = lora['name']
+            strength_model = lora['strength']
+            strength_clip = lora['strength']
+            
+            if strength_model == 0 and strength_clip == 0:
+                continue
+            
+            lora_params.append((lora_name, strength_model, strength_clip))
+
+        if len(lora_params) == 0:
+            return (model, clip)
+
+        def recursive_load_lora(lora_params, model, clip, id, folder_paths):
+            if len(lora_params) == 0:
+                return model, clip
+
+            lora_name, strength_model, strength_clip = lora_params[0]
+            if os.path.isabs(lora_name):
+                lora_path = lora_name
+            else:
+                model_url = f"{lora_cloud_front_url}/models/loras/{lora_name}"
+                model_path = folder_paths.temp_directory
+                lora_path = load_file_from_url(model_url, model_dir=model_path, file_name=lora_name)
+                 
+            lora_model, lora_clip = comfy.sd.load_lora_for_models(model, clip, comfy.utils.load_torch_file(lora_path), strength_model, strength_clip)
+
+            # Call the function again with the new lora_model and lora_clip and the remaining tuples
+            return recursive_load_lora(lora_params[1:], lora_model, lora_clip, id, folder_paths)
+
+        lora_model, lora_clip = recursive_load_lora(lora_params, model, clip, id, folder_paths)
+
+        return (lora_model, lora_clip)
 
 class AVOutputUploadImage:
     @classmethod
@@ -412,6 +477,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_ParametersPipeToPrompts": AVParametersPipeToPrompts,
     "AV_VAELoader": AVVAELoader,
     "AV_LoraLoader": AVLoraLoader,
+    "AV_LoraListLoader": AVLoraListLoader,
     "AV_CheckpointMerge": AVCheckpointMerge,
     "AV_CheckpointSave": AVCheckpointSave,
 }
@@ -423,6 +489,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ParametersPipeToPrompts": "Pipe to Prompts",
     "AV_VAELoader": "VAE Loader",
     "AV_LoraLoader": "Lora Loader",
+    "AV_LoraListLoader": "Lora List Loader",
     "AV_CheckpointMerge": "Checkpoint Merge",
     "AV_CheckpointSave": "Checkpoint Save",
 }
