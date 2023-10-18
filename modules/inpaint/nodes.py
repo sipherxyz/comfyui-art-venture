@@ -2,6 +2,7 @@ import cv2
 import torch
 import numpy as np
 from PIL import Image, ImageOps
+from typing import Dict
 
 from .sam.nodes import SAMLoader, GetSAMEmbedding, SAMEmbeddingToImage
 from .lama import LaMaInpaint
@@ -98,6 +99,50 @@ class PrepareImageAndMaskForInpaint:
         )
 
 
+class OverlayInpaintedLatent:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "original": ("LATENT",),
+                "inpainted": ("LATENT",),
+                "mask": ("MASK",),
+            }
+        }
+
+    RETURN_TYPES = ("LATENT",)
+    CATEGORY = "Art Venture/Inpainting"
+    FUNCTION = "overlay"
+
+    def overlay(self, original: Dict, inpainted: Dict, mask: torch.Tensor):
+        s_original: torch.Tensor = original["samples"]
+        s_inpainted: torch.Tensor = inpainted["samples"]
+
+        if s_original.shape[0] != s_inpainted.shape[0]:
+            raise ValueError("original and inpainted must have same batch size")
+
+        if s_original.shape[0] != mask.shape[0]:
+            raise ValueError("original and mask must have same batch size")
+
+        overlays = []
+
+        for org, inp, msk in zip(s_original, s_inpainted, mask):
+            latmask = tensor2pil(msk.unsqueeze(0), "L").convert("RGB").resize((org.shape[2], org.shape[1]))
+            latmask = np.moveaxis(np.array(latmask, dtype=np.float32), 2, 0) / 255
+            latmask = latmask[0]
+            latmask = np.around(latmask)
+            latmask = np.tile(latmask[None], (4, 1, 1))
+
+            msk = torch.asarray(1.0 - latmask)
+            nmask = torch.asarray(latmask)
+
+            overlayed = inp * nmask + org * msk
+            overlays.append(overlayed)
+
+        samples = torch.stack(overlays)
+        return ({"samples": samples},)
+
+
 class OverlayInpaintedImage:
     @classmethod
     def INPUT_TYPES(s):
@@ -148,6 +193,7 @@ NODE_CLASS_MAPPINGS = {
     "SAMEmbeddingToImage": SAMEmbeddingToImage,
     "LaMaInpaint": LaMaInpaint,
     "PrepareImageAndMaskForInpaint": PrepareImageAndMaskForInpaint,
+    "OverlayInpaintedLatent": OverlayInpaintedLatent,
     "OverlayInpaintedImage": OverlayInpaintedImage,
 }
 
@@ -156,6 +202,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetSAMEmbedding": "Get SAM Embedding",
     "SAMEmbeddingToImage": "SAM Embedding to Image",
     "LaMaInpaint": "LaMa Remove Object",
-    "PrepareImageAndMaskForInpaint": "Prepare Image and Mask for Inpainting",
+    "PrepareImageAndMaskForInpaint": "Prepare Image & Mask for Inpaint",
+    "OverlayInpaintedLatent": "Overlay Inpainted Latent",
     "OverlayInpaintedImage": "Overlay Inpainted Image",
 }
