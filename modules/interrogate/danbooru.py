@@ -6,8 +6,9 @@ import numpy as np
 import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
+from ..image_utils import resize_image
 from ..model_utils import download_model
-from ..utils import is_junction, tensor2pil, resize_image
+from ..utils import is_junction, tensor2pil
 from .blip_node import join_caption
 
 danbooru = None
@@ -102,7 +103,7 @@ class DeepDanbooruCaption:
 
         try:
             image = tensor2pil(image)
-            image = resize_image(2, image.convert("RGB"), 512, 512)
+            image = resize_image(image.convert("RGB"), 512, 512, resize_mode=2)
             arr = np.expand_dims(np.array(image, dtype=np.float32), 0) / 255
 
             with torch.no_grad():
