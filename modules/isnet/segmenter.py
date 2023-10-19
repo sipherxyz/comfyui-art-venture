@@ -195,8 +195,8 @@ class ISNetSegment:
                 mask = torch.from_numpy(mask).float()
                 masks.append(mask)
 
-                mask = tensor2pil(mask).convert("L")
-                cropped = tensor2pil(image).convert("RGB")
+                mask = tensor2pil(mask, "L")
+                cropped = tensor2pil(image, "RGB")
                 cropped.putalpha(mask)
                 segments.append(pil2tensor(cropped))
 

@@ -196,7 +196,7 @@ def pil2numpy(image: Image.Image):
     return np.array(image).astype(np.float32) / 255.0
 
 
-def numpy2pil(image: np.ndarray, mode="RGB"):
+def numpy2pil(image: np.ndarray, mode=None):
     return Image.fromarray(np.clip(255.0 * image, 0, 255).astype(np.uint8), mode)
 
 
@@ -204,7 +204,7 @@ def pil2tensor(image: Image.Image):
     return torch.from_numpy(pil2numpy(image)).unsqueeze(0)
 
 
-def tensor2pil(image: torch.Tensor, mode="RGB"):
+def tensor2pil(image: torch.Tensor, mode=None):
     return numpy2pil(image.cpu().numpy().squeeze(), mode=mode)
 
 
