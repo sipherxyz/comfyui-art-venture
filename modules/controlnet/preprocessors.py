@@ -1,5 +1,4 @@
 import os
-import sys
 import math
 from typing import Dict
 
@@ -22,8 +21,6 @@ try:
         for module_dir in preprocessors_dir_names:
             if module_dir in os.listdir(custom_node):
                 module_path = os.path.abspath(os.path.join(custom_node, module_dir))
-                if custom_node not in sys.path:
-                    sys.path.append(custom_node)
                 break
 
     if module_path is None:

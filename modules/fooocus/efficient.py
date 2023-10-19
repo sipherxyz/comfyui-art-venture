@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import Dict
 
 import folder_paths
@@ -25,8 +24,6 @@ try:
                 module_path = os.path.abspath(
                     os.path.join(custom_node, module_dir)
                 )
-                if custom_node not in sys.path:
-                    sys.path.append(custom_node)
                 break
 
     if module_path is None:

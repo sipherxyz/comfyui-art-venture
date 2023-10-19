@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import Callable
 
 import folder_paths
@@ -20,8 +19,6 @@ try:
         for module_dir in animatediff_dir_names:
             if module_dir in os.listdir(custom_node):
                 module_path = os.path.abspath(os.path.join(custom_node, module_dir))
-                if custom_node not in sys.path:
-                    sys.path.append(custom_node)
                 break
 
     if module_path is None:

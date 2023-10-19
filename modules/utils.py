@@ -15,6 +15,14 @@ from ..config import config
 from .logger import logger
 
 
+class AnyType(str):
+    def __ne__(self, __value: object) -> bool:
+        return False
+
+
+any_type = AnyType("*")
+
+
 def ensure_package(package, install_package_name=None):
     # Try to import the package
     try:
@@ -177,10 +185,12 @@ def is_junction(src: str) -> bool:
     return rc == 0
 
 
-def load_module(module_path):
+def load_module(module_path, module_name=None):
     import importlib.util
 
-    module_name = os.path.basename(module_path)
+    if module_name is None:
+        module_name = os.path.basename(module_path)
+
     if os.path.isfile(module_path):
         module_spec = importlib.util.spec_from_file_location(module_name, module_path)
     else:

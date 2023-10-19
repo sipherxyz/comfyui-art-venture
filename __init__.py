@@ -1,8 +1,11 @@
-import os
 import sys
+import folder_paths
 
-current_dir = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(current_dir, "bin"))
+custom_nodes = folder_paths.get_folder_paths("custom_nodes")
+for dir in custom_nodes:
+    if dir not in sys.path:
+        print("Adding", dir, "to sys.path")
+        sys.path.append(dir)
 
 from .modules.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 

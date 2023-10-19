@@ -1,5 +1,4 @@
 import os
-import sys
 
 import folder_paths
 import comfy.sd
@@ -23,8 +22,6 @@ try:
         for module_dir in advanced_cnet_dir_names:
             if module_dir in os.listdir(custom_node):
                 module_path = os.path.abspath(os.path.join(custom_node, module_dir))
-                if custom_node not in sys.path:
-                    sys.path.append(custom_node)
                 break
 
     if module_path is None:
