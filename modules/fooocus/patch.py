@@ -1,9 +1,10 @@
+import math
 import torch
 import comfy.model_base
 import comfy.ldm.modules.diffusionmodules.openaimodel
 import comfy.samplers
 
-from comfy.samplers import model_management, lcm, math
+from comfy.samplers import model_management, math
 from comfy.ldm.modules.diffusionmodules.openaimodel import (
     timestep_embedding,
     forward_timestep_embed,
@@ -16,6 +17,10 @@ sharpness = 2.0
 original_sampling_function = comfy.samplers.sampling_function
 original_unet_forward = comfy.ldm.modules.diffusionmodules.openaimodel.UNetModel.forward
 original_sdxl_encode_adm = comfy.model_base.SDXL.encode_adm
+
+
+def lcm(a, b):
+    return abs(a * b) // math.gcd(a, b)
 
 
 def sampling_function_patched(
