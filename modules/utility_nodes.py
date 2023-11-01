@@ -5,7 +5,7 @@ import torch
 import base64
 import random
 import requests
-from typing import Dict, Tuple
+from typing import List, Dict, Tuple
 
 from PIL import Image, ImageOps, ImageFilter
 import numpy as np
@@ -51,7 +51,7 @@ class UtilLoadImageFromUrl:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "url": ("STRING", {"default": ""}),
+                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
             "optional": {
                 "keep_alpha_channel": (
@@ -61,58 +61,81 @@ class UtilLoadImageFromUrl:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "BOOLEAN")
-    RETURN_NAMES = ("image", "mask", "has_alpha_channel")
+    RETURN_TYPES = ("IMAGE", "MASK")
+    RETURN_NAMES = ("images", "masks")
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image_from_url(self, url: str, keep_alpha_channel=False):
-        if url.startswith("data:image/"):
-            i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
-        else:
-            response = requests.get(url, timeout=5)
-            if response.status_code != 200:
-                raise Exception(response.text)
+    def load_image_from_url(self, urls: List[str], keep_alpha_channel=False):
+        images = []
+        masks = []
 
-            i = Image.open(io.BytesIO(response.content))
+        for idx, url in enumerate(urls):
+            if url.startswith("data:image/"):
+                i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
+            elif url.startswith("file://"):
+                url = url[7:]
+                if not os.path.isfile(url):
+                    raise Exception(f"File {url} does not exist")
 
-        i = ImageOps.exif_transpose(i)
-        has_alpha = "A" in i.getbands()
-        mask = None
+                i = Image.open(url)
+            else:
+                response = requests.get(url, timeout=5)
+                if response.status_code != 200:
+                    raise Exception(response.text)
 
-        if "RGB" not in i.mode:
-            i = i.convert("RGBA") if has_alpha else i.convert("RGB")
+                i = Image.open(io.BytesIO(response.content))
 
-        if has_alpha:
-            mask = i.getchannel("A")
+            i = ImageOps.exif_transpose(i)
+            has_alpha = "A" in i.getbands()
+            mask = None
 
-            # recreate image to fix weird RGB image
-            alpha = i.split()[-1]
-            image = Image.new("RGB", i.size, (0, 0, 0))
-            image.paste(i, mask=alpha)
-            image.putalpha(alpha)
+            if "RGB" not in i.mode:
+                i = i.convert("RGBA") if has_alpha else i.convert("RGB")
 
-            if not keep_alpha_channel:
-                image = image.convert("RGB")
-        else:
-            image = i
+            if has_alpha:
+                mask = i.getchannel("A")
 
-        return (image, mask)
+                # recreate image to fix weird RGB image
+                alpha = i.split()[-1]
+                image = Image.new("RGB", i.size, (0, 0, 0))
+                image.paste(i, mask=alpha)
+                image.putalpha(alpha)
+
+                if not keep_alpha_channel:
+                    image = image.convert("RGB")
+            else:
+                image = i
+
+            images.append(image)
+            masks.append(mask)
+
+        return (images, masks)
 
     def load_image(self, url: str, keep_alpha_channel=False):
-        image, mask = self.load_image_from_url(url, keep_alpha_channel)
+        urls = url.strip().split("\n")
+        images, masks = self.load_image_from_url(urls, keep_alpha_channel)
 
-        # save image to temp folder
-        preview = prepare_image_for_preview(image, self.output_dir, self.filename_prefix)
-        image = pil2tensor(image)
+        previews = []
+        np_images = []
+        np_masks = []
 
-        if mask:
-            mask = np.array(mask).astype(np.float32) / 255.0
-            mask = 1.0 - torch.from_numpy(mask)
-        else:
-            mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+        for image, mask in zip(images, masks):
+            # save image to temp folder
+            preview = prepare_image_for_preview(image, self.output_dir, self.filename_prefix)
+            image = pil2tensor(image)
 
-        return {"ui": {"images": [preview]}, "result": (image, mask)}
+            if mask:
+                mask = np.array(mask).astype(np.float32) / 255.0
+                mask = 1.0 - torch.from_numpy(mask)
+            else:
+                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+
+            previews.append(preview)
+            np_images.append(image)
+            np_masks.append(mask)
+
+        return {"ui": {"images": previews}, "result": (torch.cat(np_images), torch.stack(np_masks, dim=0))}
 
 
 class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
@@ -120,30 +143,36 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "url": ("STRING", {"default": ""}),
+                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "channel": (["alpha", "red", "green", "blue"],),
             }
         }
 
     RETURN_TYPES = ("MASK",)
-    RETURN_NAMES = ("mask",)
+    RETURN_NAMES = ("masks",)
 
     def load_image(self, url: str, channel: str):
-        image, alpha = self.load_image_from_url(url, False)
+        urls = url.strip().split("\n")
+        images, alphas = self.load_image_from_url([urls], False)
 
-        if channel == "alpha":
-            mask = alpha
-        elif channel == "red":
-            mask = image.getchannel("R")
-        elif channel == "green":
-            mask = image.getchannel("G")
-        elif channel == "blue":
-            mask = image.getchannel("B")
+        masks = []
 
-        mask = np.array(mask).astype(np.float32) / 255.0
-        mask = 1.0 - torch.from_numpy(mask)
+        for image, alpha in zip(images, alphas):
+            if channel == "alpha":
+                mask = alpha
+            elif channel == "red":
+                mask = image.getchannel("R")
+            elif channel == "green":
+                mask = image.getchannel("G")
+            elif channel == "blue":
+                mask = image.getchannel("B")
 
-        return (mask,)
+            mask = np.array(mask).astype(np.float32) / 255.0
+            mask = 1.0 - torch.from_numpy(mask)
+
+            masks.append(mask)
+
+        return (torch.stack(masks, dim=0),)
 
 
 class UtilLoadJsonFromUrl:
