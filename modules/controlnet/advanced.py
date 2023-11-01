@@ -27,7 +27,7 @@ try:
     if module_path is None:
         raise Exception("Could not find AdvancedControlNet nodes")
 
-    module_path = os.path.join(module_path, "control.py")
+    module_path = os.path.join(module_path, "control/control.py")
     module = load_module(module_path)
     print("Loaded AdvancedControlNet nodes from", module_path)
 
