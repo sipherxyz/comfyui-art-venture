@@ -32,7 +32,7 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
         subfolder,
         _,
     ) = folder_paths.get_save_image_path(prefix, output_dir, image.width, image.height)
-    file = f"{filename}_{counter:05}.png"
+    file = f"{filename}_{counter:05}_.png"
     image.save(os.path.join(outdir, file), format="PNG", compress_level=4)
 
     return {
