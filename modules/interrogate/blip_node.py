@@ -35,23 +35,6 @@ def packages(versions=False):
     ]
 
 
-def transformImage_legacy(input_image):
-    raw_image = input_image.convert("RGB")
-    raw_image = raw_image.resize((blip_size, blip_size))
-    transform = transforms.Compose(
-        [
-            transforms.Resize(raw_image.size, interpolation=InterpolationMode.BICUBIC),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.48145466, 0.4578275, 0.40821073),
-                (0.26862954, 0.26130258, 0.27577711),
-            ),
-        ]
-    )
-    image = transform(raw_image).unsqueeze(0).to(gpu)
-    return image
-
-
 def transformImage(input_image):
     raw_image = input_image.convert("RGB")
     raw_image = raw_image.resize((blip_size, blip_size))
@@ -179,6 +162,7 @@ class BlipCaption:
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("caption",)
+    OUTPUT_IS_LIST = (True,)
     FUNCTION = "blip_caption"
     CATEGORY = "Art Venture/Captioning"
 
@@ -199,27 +183,28 @@ class BlipCaption:
                 )
             blip_model = load_blip(ckpts[0])
 
-        image = tensor2pil(image)
-
-        if "transformers==4.26.1" in packages(True):
-            print("Using Legacy `transformImaage()`")
-            tensor = transformImage_legacy(image)
-        else:
-            tensor = transformImage(image)
-
         device = gpu if device_mode != "CPU" else cpu
         blip_model = blip_model.to(device)
 
         try:
+            captions = []
+
             with torch.no_grad():
-                caption = blip_model.generate(
-                    tensor,
-                    sample=False,
-                    num_beams=1,
-                    min_length=min_length,
-                    max_length=max_length,
-                )
-            return (join_caption(caption[0], prefix, suffix),)
+                for img in image:
+                    img = tensor2pil(img)
+                    tensor = transformImage(img)
+                    caption = blip_model.generate(
+                        tensor,
+                        sample=False,
+                        num_beams=1,
+                        min_length=min_length,
+                        max_length=max_length,
+                    )
+
+                    caption = join_caption(caption[0], prefix, suffix)
+                    captions.append(caption)
+
+            return (captions,)
         except:
             raise
         finally:

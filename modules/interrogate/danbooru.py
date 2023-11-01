@@ -80,6 +80,7 @@ class DeepDanbooruCaption:
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("caption",)
+    OUTPUT_IS_LIST = (True,)
     FUNCTION = "caption"
     CATEGORY = "Art Venture/Utils"
 
@@ -102,45 +103,51 @@ class DeepDanbooruCaption:
         model = load_danbooru(device_mode)
 
         try:
-            image = tensor2pil(image)
-            image = resize_image(image.convert("RGB"), 512, 512, resize_mode=2)
-            arr = np.expand_dims(np.array(image, dtype=np.float32), 0) / 255
+            captions = []
 
-            with torch.no_grad():
-                x = torch.from_numpy(arr).to(gpu)
-                y = model(x)[0].detach().cpu().numpy()
+            for img in image:
+                img = tensor2pil(img)
+                img = resize_image(img.convert("RGB"), 512, 512, resize_mode=2)
+                arr = np.expand_dims(np.array(img, dtype=np.float32), 0) / 255
 
-            probability_dict = {}
+                with torch.no_grad():
+                    x = torch.from_numpy(arr).to(gpu)
+                    y = model(x)[0].detach().cpu().numpy()
 
-            for tag, probability in zip(model.tags, y):
-                if probability < threshold:
-                    continue
+                probability_dict = {}
 
-                if tag.startswith("rating:"):
-                    continue
+                for tag, probability in zip(model.tags, y):
+                    if probability < threshold:
+                        continue
 
-                probability_dict[tag] = probability
+                    if tag.startswith("rating:"):
+                        continue
 
-            if sort_alpha:
-                tags = sorted(probability_dict)
-            else:
-                tags = [tag for tag, _ in sorted(probability_dict.items(), key=lambda x: -x[1])]
+                    probability_dict[tag] = probability
 
-            res = []
-            filtertags = {x.strip().replace(" ", "_") for x in filter_tags.split(",")}
+                if sort_alpha:
+                    tags = sorted(probability_dict)
+                else:
+                    tags = [tag for tag, _ in sorted(probability_dict.items(), key=lambda x: -x[1])]
 
-            for tag in [x for x in tags if x not in filtertags]:
-                probability = probability_dict[tag]
-                tag_outformat = tag
-                if use_spaces:
-                    tag_outformat = tag_outformat.replace("_", " ")
-                if escape:
-                    tag_outformat = re.sub(re_special, r"\\\1", tag_outformat)
+                res = []
+                filtertags = {x.strip().replace(" ", "_") for x in filter_tags.split(",")}
 
-                res.append(tag_outformat)
+                for tag in [x for x in tags if x not in filtertags]:
+                    probability = probability_dict[tag]
+                    tag_outformat = tag
+                    if use_spaces:
+                        tag_outformat = tag_outformat.replace("_", " ")
+                    if escape:
+                        tag_outformat = re.sub(re_special, r"\\\1", tag_outformat)
 
-            caption = ", ".join(res)
-            return (join_caption(caption, prefix, suffix),)
+                    res.append(tag_outformat)
+
+                caption = ", ".join(res)
+                caption = join_caption(caption, prefix, suffix)
+                captions.append(caption)
+
+            return (captions,)
         except:
             raise
         finally:
