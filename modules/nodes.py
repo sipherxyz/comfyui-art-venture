@@ -56,10 +56,6 @@ from .inpaint import (
     NODE_CLASS_MAPPINGS as INPAINT_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as INPAINT_NODE_DISPLAY_NAME_MAPPINGS,
 )
-from .faceswap_nodes import (
-    NODE_CLASS_MAPPINGS as FACESWAP_NODE_CLASS_MAPPINGS,
-    NODE_DISPLAY_NAME_MAPPINGS as FACESWAP_NODE_DISPLAY_NAME_MAPPINGS,
-)
 
 from .model_utils import load_file_from_url
 lora_cloud_front_url = "https://d111kwgh87c0gj.cloudfront.net"
