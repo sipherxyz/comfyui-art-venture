@@ -58,7 +58,9 @@ from .inpaint import (
 )
 
 from .model_utils import load_file_from_url
+
 lora_cloud_front_url = "https://d111kwgh87c0gj.cloudfront.net"
+
 
 class AVVAELoader(VAELoader):
     @classmethod
@@ -103,44 +105,80 @@ class AVLoraLoader(LoraLoader):
 
         return super().load_lora(model, clip, lora_name, *args, **kwargs)
 
-class AVLoraListLoader:
+
+class AVLoraListStacker:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": { "model": ("MODEL",),
-                              "clip": ("CLIP", ),
-                              "data": ("STRING", {"default": "","multiline": True}),
-                              }}
-    RETURN_TYPES = ("MODEL", "CLIP")
-    FUNCTION = "load_list_lora"
+        return {
+            "required": {
+                "data": ("STRING", {"default": "", "multiline": True}),
+            },
+            "optional": {"base_url": ("STRING", {"default": lora_cloud_front_url}), "lora_stack": ("LORA_STACK",)},
+        }
 
+    RETURN_TYPES = ("LORA_STACK",)
+    FUNCTION = "load_list_lora"
     CATEGORY = "Art Venture/Loaders"
 
-    def load_list_lora(self, model, clip, data):
-        # data is a list of lora model (lora_name, strength_model, strength_clip) in json format
+    def parse_lora_list(self, data: str, base_url: str):
+        # data is a list of lora model (lora_name, strength_model, strength_clip, url) in json format
         # trim data
         data = data.strip()
-        
         if data == "" or data == "[]" or data is None:
-            return (model, clip)
+            return []
 
         print(f"Loading lora list: {data}")
 
         lora_list = json.loads(data)
-
         if len(lora_list) == 0:
-            return (model, clip)
-        
+            return []
+
+        available_loras = folder_paths.get_filename_list("loras")
+        model_path = os.path.join(folder_paths.models_dir, "loras")
+
         lora_params = []
-        
         for lora in lora_list:
-            lora_name = lora['name']
-            strength_model = lora['strength']
-            strength_clip = lora['strength']
-            
+            lora_name = lora["name"]
+            strength_model = lora["strength"]
+            strength_clip = lora["strength"]
+            lora_url = lora.get("url", None)
+
             if strength_model == 0 and strength_clip == 0:
                 continue
-            
+
+            if lora_name not in available_loras:
+                lora_url = lora_url or f"{base_url}/models/loras/{lora_name}"
+                load_file_from_url(lora_url, model_dir=model_path, file_name=lora_name)
+
             lora_params.append((lora_name, strength_model, strength_clip))
+
+        return lora_params
+
+    def load_list_lora(self, data, base_url=lora_cloud_front_url, lora_stack=None):
+        loras = self.parse_lora_list(data, base_url=base_url)
+
+        if lora_stack is not None:
+            loras.extend([l for l in lora_stack if l[0] != "None"])
+
+        return (loras,)
+
+
+class AVLoraListLoader(AVLoraListStacker):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "data": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+            },
+            "optional": {"base_url": ("STRING", {"default": lora_cloud_front_url})},
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP")
+
+    def load_list_lora(self, model, clip, data, base_url=lora_cloud_front_url):
+        lora_params = self.parse_lora_list(data, base_url=base_url)
 
         if len(lora_params) == 0:
             return (model, clip)
@@ -150,14 +188,11 @@ class AVLoraListLoader:
                 return model, clip
 
             lora_name, strength_model, strength_clip = lora_params[0]
-            if os.path.isabs(lora_name):
-                lora_path = lora_name
-            else:
-                model_url = f"{lora_cloud_front_url}/models/loras/{lora_name}"
-                model_path = folder_paths.temp_directory
-                lora_path = load_file_from_url(model_url, model_dir=model_path, file_name=lora_name)
-                 
-            lora_model, lora_clip = comfy.sd.load_lora_for_models(model, clip, comfy.utils.load_torch_file(lora_path), strength_model, strength_clip)
+
+            lora_path = folder_paths.get_full_path("loras", lora_name)
+            lora_model, lora_clip = comfy.sd.load_lora_for_models(
+                model, clip, comfy.utils.load_torch_file(lora_path), strength_model, strength_clip
+            )
 
             # Call the function again with the new lora_model and lora_clip and the remaining tuples
             return recursive_load_lora(lora_params[1:], lora_model, lora_clip, id, folder_paths)
@@ -166,13 +201,14 @@ class AVLoraListLoader:
 
         return (lora_model, lora_clip)
 
+
 class AVOutputUploadImage:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {"images": ("IMAGE",)},
             "optional": {
-                "folder_id": ("STRING", {"multiline": False}),
+                "folder_id": ("STRING", {"multiline": False, "dynamicPrompts": False}),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -478,6 +514,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_VAELoader": AVVAELoader,
     "AV_LoraLoader": AVLoraLoader,
     "AV_LoraListLoader": AVLoraListLoader,
+    "AV_LoraListStacker": AVLoraListStacker,
     "AV_CheckpointMerge": AVCheckpointMerge,
     "AV_CheckpointSave": AVCheckpointSave,
 }
@@ -490,6 +527,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_VAELoader": "VAE Loader",
     "AV_LoraLoader": "Lora Loader",
     "AV_LoraListLoader": "Lora List Loader",
+    "AV_LoraListStacker": "Lora List Stacker",
     "AV_CheckpointMerge": "Checkpoint Merge",
     "AV_CheckpointSave": "Checkpoint Save",
 }
