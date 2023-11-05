@@ -111,7 +111,7 @@ class AVLoraListStacker:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "data": ("STRING", {"default": "", "multiline": True}),
+                "data": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
             "optional": {"base_url": ("STRING", {"default": lora_cloud_front_url}), "lora_stack": ("LORA_STACK",)},
         }
