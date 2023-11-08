@@ -512,7 +512,7 @@ class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
     def get_aspect_ratio(self, aspect_ratio):
         ratio, width, height = super().get_aspect_ratio(aspect_ratio)
 
-        scale_ratio = 512 / min(width, height)
+        scale_ratio = 768 / max(width, height)
 
         width = int(scale_ratio * width / 8) * 8
         height = int(scale_ratio * height / 8) * 8
