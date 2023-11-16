@@ -33,11 +33,13 @@ def apply_preprocessor(image, preprocessor, resolution=512):
 
     preprocessor_class, default_args = control_net_preprocessors[preprocessor]
     default_args: List = default_args.copy()
-    default_args.insert(0, image)
-    default_args.append(resolution)
 
     required_args = preprocessor_class.INPUT_TYPES()["required"].keys()
     optional_args = preprocessor_class.INPUT_TYPES().get("optional", {}).keys()
+    resolution_idx = list(optional_args).index("resolution")
+    default_args.insert(resolution_idx, resolution)
+    default_args.insert(0, image)
+    
     preprocessor_args = {key: default_args[i] for i, key in enumerate(required_args)}
     preprocessor_args.update({key: default_args[i + len(required_args)] for i, key in enumerate(optional_args)})
 
