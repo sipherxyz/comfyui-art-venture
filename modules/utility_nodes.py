@@ -952,7 +952,7 @@ class UtilSeedSelector:
     FUNCTION = "get_seed"
 
     def get_seed(self, mode, seed, fixed_seed):
-        return (fixed_seed if not mode else seed)
+        return (fixed_seed if not mode else seed,)
 
 
 class UtilModelMerge:
