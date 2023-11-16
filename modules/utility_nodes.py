@@ -937,7 +937,7 @@ class UtilSeedSelector:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mode": (["random", "fixed"],),
+                "mode": ("BOOLEAN", {"default": True, "label_on": "random", "label_off": "fixed"}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
                 "fixed_seed": (
                     "INT",
@@ -952,7 +952,7 @@ class UtilSeedSelector:
     FUNCTION = "get_seed"
 
     def get_seed(self, mode, seed, fixed_seed):
-        return (seed if mode == "random" else fixed_seed,)
+        return (fixed_seed if not mode else seed)
 
 
 class UtilModelMerge:
