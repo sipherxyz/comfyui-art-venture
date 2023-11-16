@@ -406,6 +406,27 @@ class UtilNumberScaler:
         return (num,)
 
 
+class UtilBooleanPrimitive:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "value": ("BOOLEAN", {"default": False}),
+                "reverse": ("BOOLEAN", {"default": False}),
+            }
+        }
+
+    RETURN_TYPES = ("BOOLEAN", "STRING")
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "boolean_primitive"
+
+    def boolean_primitive(self, value: bool, reverse: bool):
+        if reverse:
+            value = not value
+
+        return (value, str(value))
+
+
 class UtilImageMuxer:
     @classmethod
     def INPUT_TYPES(s):
@@ -992,6 +1013,7 @@ NODE_CLASS_MAPPINGS = {
     "LoadImageAsMaskFromUrl": UtilLoadImageAsMaskFromUrl,
     "StringToInt": UtilStringToInt,
     "StringToNumber": UtilStringToNumber,
+    "BooleanPrimitive": UtilBooleanPrimitive,
     "ImageMuxer": UtilImageMuxer,
     "ImageScaleDown": UtilImageScaleDown,
     "ImageScaleDownBy": UtilImageScaleDownBy,
@@ -1023,6 +1045,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageAsMaskFromUrl": "Load Image (as Mask) From URL",
     "StringToInt": "String to Int",
     "StringToNumber": "String to Number",
+    "BooleanPrimitive": "Boolean",
     "ImageMuxer": "Image Muxer",
     "ImageScaleDown": "Scale Down",
     "ImageScaleDownBy": "Scale Down By",
