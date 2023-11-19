@@ -213,35 +213,36 @@ function addVideoCustomSize(nodeType, nodeData, widgetName) {
   });
 }
 
-function addUploadWidget(nodeType, nodeData, widgetName, type = "video") {
+function addUploadWidget(nodeType, widgetName, type) {
   chainCallback(nodeType.prototype, "onNodeCreated", function () {
     const pathWidget = this.widgets.find((w) => w.name === widgetName);
     const fileInput = document.createElement("input");
     chainCallback(this, "onRemoved", () => {
       fileInput?.remove();
     });
-    if (type == "folder") {
+
+    if (type === "image") {
       Object.assign(fileInput, {
         type: "file",
+        accept: "image/png,image/jpeg,image/webp",
         style: "display: none",
-        webkitdirectory: true,
+        multiple: true,
         onchange: async () => {
-          const directory = fileInput.files[0].webkitRelativePath;
-          const i = directory.lastIndexOf('/');
-          if (i <= 0) {
-            throw "No directory found";
+          if (!fileInput.files.length) {
+            return
           }
 
           let successes = [];
           for (const file of fileInput.files) {
             const params = await uploadFile(file)
+
             if (!!params) {
               successes.push(params);
             } else {
-              //Upload failed, but some prior uploads may have succeeded
-              //Stop future uploads to prevent cascading failures
-              //and only add to list if an upload has succeeded
-              if (successes.length > 0) {
+              // Upload failed, but some prior uploads may have succeeded
+              // Stop future uploads to prevent cascading failures
+              // and only add to list if an upload has succeeded
+              if (successes.length) {
                 break
               } else {
                 return;
@@ -249,30 +250,13 @@ function addUploadWidget(nodeType, nodeData, widgetName, type = "video") {
             }
           }
 
-          pathWidget.value = successes.map(formatUploadedUrl).join('\n');
+          pathWidget.value = successes.map(formatUploadedUrl).join("\n");
         },
       });
     } else if (type === "video") {
       Object.assign(fileInput, {
         type: "file",
         accept: "video/webm,video/mp4,video/mkv,image/gif,image/webp",
-        style: "display: none",
-        onchange: async () => {
-          if (fileInput.files.length) {
-            const params = await uploadFile(fileInput.files[0])
-            if (!params) {
-              // upload failed and file can not be added to options
-              return;
-            }
-
-            pathWidget.value = formatUploadedUrl(params);
-          }
-        },
-      });
-    } else if (type === "image") {
-      Object.assign(fileInput, {
-        type: "file",
-        accept: "image/png,image/jpeg,image/webp",
         style: "display: none",
         onchange: async () => {
           if (fileInput.files.length) {
@@ -540,17 +524,18 @@ function addVideoPreviewOptions(nodeType) {
 app.registerExtension({
   name: "ArtVenture.Upload",
   async beforeRegisterNodeDef(nodeType, nodeData) {
+    if (!nodeData) return
     if (!supportedNodes.includes(nodeData?.name)) {
       return
     }
 
     useKVState(nodeType);
 
-    if (nodeData?.name == "LoadImageFromUrl") {
-      addUploadWidget(nodeType, nodeData, "url", "image");
-    } else if (nodeData?.name == "LoadVideoFromUrl") {
+    if (nodeData.name == "LoadImageFromUrl") {
+      addUploadWidget(nodeType, "url", "image");
+    } else if (nodeData.name == "LoadVideoFromUrl") {
       addVideoCustomSize(nodeType, nodeData, "force_size")
-      addUploadWidget(nodeType, nodeData, "video");
+      addUploadWidget(nodeType, "video", "video");
       addVideoPreview(nodeType);
       addVideoPreviewOptions(nodeType);
     }

@@ -58,10 +58,15 @@ class UtilLoadImageFromUrl:
                     "BOOLEAN",
                     {"default": False, "label_on": "enabled", "label_off": "disabled"},
                 ),
+                "output_mode": (
+                    "BOOLEAN",
+                    {"default": False, "label_on": "list", "label_off": "batch"},
+                ),
             },
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
+    OUTPUT_IS_LIST = (True, True)
     RETURN_NAMES = ("images", "masks")
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
@@ -138,7 +143,7 @@ class UtilLoadImageFromUrl:
 
         return (images, masks)
 
-    def load_image(self, url: str, keep_alpha_channel=False):
+    def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
         urls = url.strip().split("\n")
         images, masks = self.load_image_from_url(urls, keep_alpha_channel)
 
@@ -159,9 +164,23 @@ class UtilLoadImageFromUrl:
 
             previews.append(preview)
             np_images.append(image)
-            np_masks.append(mask)
+            np_masks.append(mask.unsqueeze(0))
 
-        return {"ui": {"images": previews}, "result": (torch.cat(np_images), torch.stack(np_masks, dim=0))}
+        if output_mode:
+            result = (np_images, np_masks)
+        else:
+            has_size_mismatch = False
+            for image in np_images[1:]:
+                if image.shape[1] != np_images[0].shape[1] or image.shape[2] != np_images[0].shape[2]:
+                    has_size_mismatch = True
+                    break
+
+            if has_size_mismatch:
+                raise Exception("To output as batch, images must have the same size. Use list output mode instead.")
+
+            result = ([torch.cat(np_images)], [torch.cat(np_masks)])
+
+        return {"ui": {"images": previews}, "result": result}
 
 
 class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
