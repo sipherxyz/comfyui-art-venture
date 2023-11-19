@@ -14,7 +14,6 @@ from nodes import LoraLoader, VAELoader
 from comfy_extras.nodes_model_merging import CheckpointSave
 
 from .logger import logger
-from .utils import upload_to_av
 
 from .utility_nodes import (
     NODE_CLASS_MAPPINGS as UTIL_NODE_CLASS_MAPPINGS,
@@ -56,10 +55,14 @@ from .inpaint import (
     NODE_CLASS_MAPPINGS as INPAINT_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as INPAINT_NODE_DISPLAY_NAME_MAPPINGS,
 )
+from .video import (
+    NODE_CLASS_MAPPINGS as VIDEO_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as VIDEO_NODE_DISPLAY_NAME_MAPPINGS,
+)
 
 from .model_utils import load_file_from_url
 
-lora_cloud_front_url = "https://d111kwgh87c0gj.cloudfront.net"
+lora_cloud_front_url = "https://cdn.artventure.ai"
 
 
 class AVVAELoader(VAELoader):
@@ -200,61 +203,6 @@ class AVLoraListLoader(AVLoraListStacker):
         lora_model, lora_clip = recursive_load_lora(lora_params, model, clip, id, folder_paths)
 
         return (lora_model, lora_clip)
-
-
-class AVOutputUploadImage:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {"images": ("IMAGE",)},
-            "optional": {
-                "folder_id": ("STRING", {"multiline": False, "dynamicPrompts": False}),
-            },
-            "hidden": {
-                "prompt": "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ()
-    OUTPUT_NODE = True
-    CATEGORY = "Art Venture"
-    FUNCTION = "upload_images"
-
-    def upload_images(
-        self,
-        images,
-        folder_id: str = None,
-        prompt=None,
-        extra_pnginfo=None,
-    ):
-        files = list()
-        for idx, image in enumerate(images):
-            i = 255.0 * image.cpu().numpy()
-            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
-            metadata = PngInfo()
-            if prompt is not None:
-                metadata.add_text("prompt", json.dumps(prompt))
-            if extra_pnginfo is not None:
-                for x in extra_pnginfo:
-                    logger.debug(f"Adding {x} to pnginfo: {extra_pnginfo[x]}")
-                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
-
-            buffer = io.BytesIO()
-            buffer.seek(0)
-            files.append(
-                (
-                    "files",
-                    (f"image-{idx}.png", buffer, "image/png"),
-                )
-            )
-
-        additional_data = {"success": "true"}
-        if folder_id is not None:
-            additional_data["folderId"] = folder_id
-
-        upload_to_av(files, additional_data=additional_data)
-        return ("Uploaded to ArtVenture!",)
 
 
 class AVCheckpointModelsToParametersPipe:
@@ -506,7 +454,6 @@ class AVCheckpointSave(CheckpointSave):
 
 
 NODE_CLASS_MAPPINGS = {
-    "AV_UploadImage": AVOutputUploadImage,
     "AV_CheckpointModelsToParametersPipe": AVCheckpointModelsToParametersPipe,
     "AV_PromptsToParametersPipe": AVPromptsToParametersPipe,
     "AV_ParametersPipeToCheckpointModels": AVParametersPipeToCheckpointModels,
@@ -519,7 +466,6 @@ NODE_CLASS_MAPPINGS = {
     "AV_CheckpointSave": AVCheckpointSave,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AV_UploadImage": "Upload to Art Venture",
     "AV_CheckpointModelsToParametersPipe": "Checkpoint Models to Pipe",
     "AV_PromptsToParametersPipe": "Prompts to Pipe",
     "AV_ParametersPipeToCheckpointModels": "Pipe to Checkpoint Models",
@@ -562,3 +508,6 @@ NODE_DISPLAY_NAME_MAPPINGS.update(ISNET_NODE_DISPLAY_NAME_MAPPINGS)
 
 NODE_CLASS_MAPPINGS.update(INPAINT_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(INPAINT_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(VIDEO_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(VIDEO_NODE_DISPLAY_NAME_MAPPINGS)

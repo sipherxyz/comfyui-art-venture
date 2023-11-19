@@ -70,7 +70,7 @@ class UtilLoadImageFromUrl:
         images = []
         masks = []
 
-        for idx, url in enumerate(urls):
+        for url in urls:
             if url.startswith("data:image/"):
                 i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
             elif url.startswith("file://"):
@@ -79,12 +79,38 @@ class UtilLoadImageFromUrl:
                     raise Exception(f"File {url} does not exist")
 
                 i = Image.open(url)
-            else:
+            elif url.startswith("http://") or url.startswith("https://"):
                 response = requests.get(url, timeout=5)
                 if response.status_code != 200:
                     raise Exception(response.text)
 
                 i = Image.open(io.BytesIO(response.content))
+            elif url.startswith("/view?"):
+                from urllib.parse import parse_qs
+
+                qs = parse_qs(url[6:])
+                filename = qs.get("name", qs.get("filename", None))
+                if filename is None:
+                    raise Exception(f"Invalid url: {url}")
+
+                filename = filename[0]
+                subfolder = qs.get("subfolder", None)
+                if subfolder is not None:
+                    filename = os.path.join(subfolder[0], filename)
+
+                dirtype = qs.get("type", ["input"])
+                if dirtype[0] == "input":
+                    url = os.path.join(folder_paths.get_input_directory(), filename)
+                elif dirtype[0] == "output":
+                    url = os.path.join(folder_paths.get_output_directory(), filename)
+                elif dirtype[0] == "temp":
+                    url = os.path.join(folder_paths.get_temp_directory(), filename)
+                else:
+                    raise Exception(f"Invalid url: {url}")
+
+                i = Image.open(url)
+            else:
+                raise Exception(f"Invalid url: {url}")
 
             i = ImageOps.exif_transpose(i)
             has_alpha = "A" in i.getbands()

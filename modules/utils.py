@@ -8,10 +8,9 @@ import traceback
 import importlib
 import subprocess
 import torch.nn.functional as F
-from typing import Callable, Dict
+from typing import Callable
 from PIL import Image
 
-from ..config import config
 from .logger import logger
 
 
@@ -40,75 +39,21 @@ def ensure_package(package, install_package_name=None):
         print(f"Package {package} is already installed.")
 
 
-def request_with_retry(
-    make_request: Callable[[], requests.Response],
-    max_try: int = 3,
-    retries: int = 0,
-):
-    try:
-        res = make_request()
-        if res.status_code > 400:
-            raise Exception(res.text)
+# modified from https://stackoverflow.com/questions/22058048/hashing-a-file-in-python
+def calculate_file_hash(filename: str, hash_every_n: int = 1):
+    import hashlib
 
-        return True
-    except requests.exceptions.ConnectionError:
-        logger.error("Connection error")
-        if retries >= max_try - 1:
-            return False
-
-        time.sleep(2)
-        logger.info(f"Retrying {retries + 1}...")
-        return request_with_retry(
-            make_request,
-            max_try=max_try,
-            retries=retries + 1,
-        )
-    except Exception as e:
-        logger.error("Request error")
-        logger.error(e)
-        logger.debug(traceback.format_exc())
-        return False
-
-
-def upload_to_av(
-    files: list,
-    additional_data: dict = {},
-    task_id: str = None,
-    upload_url: str = None,
-):
-    if upload_url is None:
-        upload_url = config.get("av_endpoint") + "/api/recipe/sd-tasks"
-        if task_id is not None and task_id != "":
-            upload_url += f"/complete/{task_id}"
-        else:
-            upload_url += "/upload"
-
-    auth_token = config.get("av_token")
-    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token and auth_token != "" else None
-
-    upload = lambda: requests.post(
-        upload_url,
-        timeout=30,
-        headers=headers,
-        files=files,
-        data=additional_data,
-    )
-
-    return request_with_retry(upload)
-
-
-def get_task_from_av():
-    get_task_url = config.get("av_endpoint") + "/api/recipe/sd-tasks/one-in-queue"
-    auth_token = config.get("av_token", None)
-    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token and auth_token != "" else None
-
-    response = requests.get(get_task_url, timeout=10, headers=headers)
-    if response.status_code >= 400:
-        raise Exception(response.text)
-
-    data: Dict = response.json()
-
-    return data
+    h = hashlib.sha256()
+    b = bytearray(10 * 1024 * 1024)  # read 10 megabytes at a time
+    mv = memoryview(b)
+    with open(filename, "rb", buffering=0) as f:
+        i = 0
+        # don't hash entire file, only portions of it if requested
+        while n := f.readinto(mv):
+            if i % hash_every_n == 0:
+                h.update(mv[:n])
+            i += 1
+    return h.hexdigest()
 
 
 def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
