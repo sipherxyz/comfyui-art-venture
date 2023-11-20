@@ -115,6 +115,13 @@ function formatUploadedUrl(params) {
     return params.url
   }
 
+  params = { ...params }
+
+  if (!params.filename && params.name) {
+    params.filename = params.name
+    delete params.name
+  }
+
   return api.apiURL('/view?' + new URLSearchParams(params));
 }
 
@@ -250,7 +257,9 @@ function addUploadWidget(nodeType, widgetName, type) {
             }
           }
 
-          pathWidget.value = successes.map(formatUploadedUrl).join("\n");
+          nodeType.images = successes.map(formatUploadedUrl)
+          pathWidget.value = nodeType.images.join("\n");
+          fileInput.value = ''
         },
       });
     } else if (type === "video") {
@@ -267,6 +276,7 @@ function addUploadWidget(nodeType, widgetName, type) {
             }
 
             pathWidget.value = formatUploadedUrl(params);
+            fileInput.value = ''
           }
         },
       });
@@ -521,6 +531,317 @@ function addVideoPreviewOptions(nodeType) {
   });
 }
 
+function addImagePreview(nodeType) {
+  function getImageTop(node) {
+    let shiftY;
+    if (node.imageOffset != null) {
+      shiftY = node.imageOffset;
+    } else {
+      if (node.widgets?.length) {
+        const w = node.widgets[node.widgets.length - 1];
+        shiftY = w.last_y;
+        if (w.computeSize) {
+          shiftY += w.computeSize()[1] + 4;
+        }
+        else if (w.computedHeight) {
+          shiftY += w.computedHeight;
+        }
+        else {
+          shiftY += LiteGraph.NODE_WIDGET_HEIGHT + 4;
+        }
+      } else {
+        shiftY = node.computeSize()[1];
+      }
+    }
+    return shiftY;
+  }
+
+  nodeType.prototype.onDrawBackground = function (ctx) {
+    if (!this.flags.collapsed) {
+      let imageURLs = this.images ?? []
+      let imagesChanged = false
+
+      if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
+        this.displayingImages = imageURLs
+        imagesChanged = true
+      }
+
+      if (imagesChanged) {
+        this.imageIndex = null;
+        if (imageURLs.length > 0) {
+          Promise.all(
+            imageURLs.map((src) => {
+              return new Promise((r) => {
+                const img = new Image();
+                img.onload = () => r(img);
+                img.onerror = () => r(null);
+                img.src = src
+              });
+            })
+          ).then((imgs) => {
+            this.imgs = imgs.filter(Boolean);
+            this.setSizeForImage?.();
+            app.graph.setDirtyCanvas(true);
+          });
+        }
+        else {
+          this.imgs = null;
+        }
+      }
+
+      function calculateGrid(w, h, n) {
+        let columns, rows, cellsize;
+
+        if (w > h) {
+          cellsize = h;
+          columns = Math.ceil(w / cellsize);
+          rows = Math.ceil(n / columns);
+        } else {
+          cellsize = w;
+          rows = Math.ceil(h / cellsize);
+          columns = Math.ceil(n / rows);
+        }
+
+        while (columns * rows < n) {
+          cellsize++;
+          if (w >= h) {
+            columns = Math.ceil(w / cellsize);
+            rows = Math.ceil(n / columns);
+          } else {
+            rows = Math.ceil(h / cellsize);
+            columns = Math.ceil(n / rows);
+          }
+        }
+
+        const cell_size = Math.min(w / columns, h / rows);
+        return { cell_size, columns, rows };
+      }
+
+      function is_all_same_aspect_ratio(imgs) {
+        // assume: imgs.length >= 2
+        let ratio = imgs[0].naturalWidth / imgs[0].naturalHeight;
+
+        for (let i = 1; i < imgs.length; i++) {
+          let this_ratio = imgs[i].naturalWidth / imgs[i].naturalHeight;
+          if (ratio != this_ratio)
+            return false;
+        }
+
+        return true;
+      }
+
+      if (this.imgs && this.imgs.length) {
+        const canvas = app.graph.list_of_graphcanvas[0];
+        const mouse = canvas.graph_mouse;
+        if (!canvas.pointer_is_down && this.pointerDown) {
+          if (mouse[0] === this.pointerDown.pos[0] && mouse[1] === this.pointerDown.pos[1]) {
+            this.imageIndex = this.pointerDown.index;
+          }
+          this.pointerDown = null;
+        }
+
+        let imageIndex = this.imageIndex;
+        const numImages = this.imgs.length;
+        if (numImages === 1 && !imageIndex) {
+          this.imageIndex = imageIndex = 0;
+        }
+
+        const top = getImageTop(this);
+        var shiftY = top;
+
+        let dw = this.size[0];
+        let dh = this.size[1];
+        dh -= shiftY;
+
+        if (imageIndex == null) {
+          var cellWidth, cellHeight, shiftX, cell_padding, cols;
+
+          const compact_mode = is_all_same_aspect_ratio(this.imgs);
+          if (!compact_mode) {
+            // use rectangle cell style and border line
+            cell_padding = 2;
+            const { cell_size, columns, rows } = calculateGrid(dw, dh, numImages);
+            cols = columns;
+
+            cellWidth = cell_size;
+            cellHeight = cell_size;
+            shiftX = (dw - cell_size * cols) / 2;
+            shiftY = (dh - cell_size * rows) / 2 + top;
+          }
+          else {
+            cell_padding = 0;
+            let best = 0;
+            let w = this.imgs[0].naturalWidth;
+            let h = this.imgs[0].naturalHeight;
+
+            // compact style
+            for (let c = 1; c <= numImages; c++) {
+              const rows = Math.ceil(numImages / c);
+              const cW = dw / c;
+              const cH = dh / rows;
+              const scaleX = cW / w;
+              const scaleY = cH / h;
+
+              const scale = Math.min(scaleX, scaleY, 1);
+              const imageW = w * scale;
+              const imageH = h * scale;
+              const area = imageW * imageH * numImages;
+
+              if (area > best) {
+                best = area;
+                cellWidth = imageW;
+                cellHeight = imageH;
+                cols = c;
+                shiftX = c * ((cW - imageW) / 2);
+              }
+            }
+          }
+
+          let anyHovered = false;
+          this.imageRects = [];
+          for (let i = 0; i < numImages; i++) {
+            const img = this.imgs[i];
+            const row = Math.floor(i / cols);
+            const col = i % cols;
+            const x = col * cellWidth + shiftX;
+            const y = row * cellHeight + shiftY;
+            if (!anyHovered) {
+              anyHovered = LiteGraph.isInsideRectangle(
+                mouse[0],
+                mouse[1],
+                x + this.pos[0],
+                y + this.pos[1],
+                cellWidth,
+                cellHeight
+              );
+              if (anyHovered) {
+                this.overIndex = i;
+                let value = 110;
+                if (canvas.pointer_is_down) {
+                  if (!this.pointerDown || this.pointerDown.index !== i) {
+                    this.pointerDown = { index: i, pos: [...mouse] };
+                  }
+                  value = 125;
+                }
+                ctx.filter = `contrast(${value}%) brightness(${value}%)`;
+                canvas.canvas.style.cursor = "pointer";
+              }
+            }
+            this.imageRects.push([x, y, cellWidth, cellHeight]);
+
+            let wratio = cellWidth / img.width;
+            let hratio = cellHeight / img.height;
+            var ratio = Math.min(wratio, hratio);
+
+            let imgHeight = ratio * img.height;
+            let imgY = row * cellHeight + shiftY + (cellHeight - imgHeight) / 2;
+            let imgWidth = ratio * img.width;
+            let imgX = col * cellWidth + shiftX + (cellWidth - imgWidth) / 2;
+
+            ctx.drawImage(img, imgX + cell_padding, imgY + cell_padding, imgWidth - cell_padding * 2, imgHeight - cell_padding * 2);
+            if (!compact_mode) {
+              // rectangle cell and border line style
+              ctx.strokeStyle = "#8F8F8F";
+              ctx.lineWidth = 1;
+              ctx.strokeRect(x + cell_padding, y + cell_padding, cellWidth - cell_padding * 2, cellHeight - cell_padding * 2);
+            }
+
+            ctx.filter = "none";
+          }
+
+          if (!anyHovered) {
+            this.pointerDown = null;
+            this.overIndex = null;
+          }
+        } else {
+          // Draw individual
+          let w = this.imgs[imageIndex].naturalWidth;
+          let h = this.imgs[imageIndex].naturalHeight;
+
+          const scaleX = dw / w;
+          const scaleY = dh / h;
+          const scale = Math.min(scaleX, scaleY, 1);
+
+          w *= scale;
+          h *= scale;
+
+          let x = (dw - w) / 2;
+          let y = (dh - h) / 2 + shiftY;
+          ctx.drawImage(this.imgs[imageIndex], x, y, w, h);
+
+          const drawButton = (x, y, sz, text) => {
+            const hovered = LiteGraph.isInsideRectangle(mouse[0], mouse[1], x + this.pos[0], y + this.pos[1], sz, sz);
+            let fill = "#333";
+            let textFill = "#fff";
+            let isClicking = false;
+            if (hovered) {
+              canvas.canvas.style.cursor = "pointer";
+              if (canvas.pointer_is_down) {
+                fill = "#1e90ff";
+                isClicking = true;
+              } else {
+                fill = "#eee";
+                textFill = "#000";
+              }
+            } else {
+              this.pointerWasDown = null;
+            }
+
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.roundRect(x, y, sz, sz, [4]);
+            ctx.fill();
+            ctx.fillStyle = textFill;
+            ctx.font = "12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(text, x + 15, y + 20);
+
+            return isClicking;
+          };
+
+          if (numImages > 1) {
+            if (drawButton(dw - 40, dh + top - 40, 30, `${this.imageIndex + 1}/${numImages}`)) {
+              let i = this.imageIndex + 1 >= numImages ? 0 : this.imageIndex + 1;
+              if (!this.pointerDown || !this.pointerDown.index === i) {
+                this.pointerDown = { index: i, pos: [...mouse] };
+              }
+            }
+
+            if (drawButton(dw - 40, top + 10, 30, `x`)) {
+              if (!this.pointerDown || !this.pointerDown.index === null) {
+                this.pointerDown = { index: null, pos: [...mouse] };
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  chainCallback(nodeType.prototype, "onNodeCreated", function () {
+    const pathWidget = this.widgets.find((w) => w.name === "url");
+    pathWidget._value = pathWidget.value;
+    Object.defineProperty(pathWidget, "value", {
+      set: (value) => {
+        pathWidget._value = value;
+        pathWidget.inputEl.value = value
+        this.images = (value ?? '').split("\n").filter(url => /^(https?:\/\/|\/view\?)/.test(url))
+      },
+      get: () => {
+        return pathWidget._value;
+      }
+    });
+    pathWidget.inputEl.addEventListener('change', (e) => {
+      const value = e.target.value
+      pathWidget._value = value;
+      this.images = (value ?? '').split("\n").filter(url => /^(https?:\/\/|\/view\?)/.test(url))
+    })
+
+    // Set value to ensure preview displays on initial add.
+    pathWidget.value = pathWidget._value;
+  });
+}
+
 app.registerExtension({
   name: "ArtVenture.Upload",
   async beforeRegisterNodeDef(nodeType, nodeData) {
@@ -533,6 +854,7 @@ app.registerExtension({
 
     if (nodeData.name == "LoadImageFromUrl") {
       addUploadWidget(nodeType, "url", "image");
+      addImagePreview(nodeType)
     } else if (nodeData.name == "LoadVideoFromUrl") {
       addVideoCustomSize(nodeType, nodeData, "force_size")
       addUploadWidget(nodeType, "video", "video");
