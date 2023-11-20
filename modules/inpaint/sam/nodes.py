@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from PIL import Image
@@ -8,6 +9,13 @@ import comfy.model_management as model_management
 import comfy.utils
 
 from ...utils import tensor2pil, pil2tensor
+
+folder_paths.folder_names_and_paths["sams"] = (
+    [
+        os.path.join(folder_paths.models_dir, "sams"),
+    ],
+    folder_paths.supported_pt_extensions,
+)
 
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
