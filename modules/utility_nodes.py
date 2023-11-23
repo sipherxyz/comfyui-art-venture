@@ -42,6 +42,79 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
     }
 
 
+def load_images_from_url(urls: List[str], keep_alpha_channel=False):
+    images = []
+    masks = []
+
+    for url in urls:
+        if url.startswith("data:image/"):
+            i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
+        elif url.startswith("file://"):
+            url = url[7:]
+            if not os.path.isfile(url):
+                raise Exception(f"File {url} does not exist")
+
+            i = Image.open(url)
+        elif url.startswith("http://") or url.startswith("https://"):
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                raise Exception(response.text)
+
+            i = Image.open(io.BytesIO(response.content))
+        elif url.startswith("/view?"):
+            from urllib.parse import parse_qs
+
+            qs = parse_qs(url[6:])
+            filename = qs.get("name", qs.get("filename", None))
+            if filename is None:
+                raise Exception(f"Invalid url: {url}")
+
+            filename = filename[0]
+            subfolder = qs.get("subfolder", None)
+            if subfolder is not None:
+                filename = os.path.join(subfolder[0], filename)
+
+            dirtype = qs.get("type", ["input"])
+            if dirtype[0] == "input":
+                url = os.path.join(folder_paths.get_input_directory(), filename)
+            elif dirtype[0] == "output":
+                url = os.path.join(folder_paths.get_output_directory(), filename)
+            elif dirtype[0] == "temp":
+                url = os.path.join(folder_paths.get_temp_directory(), filename)
+            else:
+                raise Exception(f"Invalid url: {url}")
+
+            i = Image.open(url)
+        else:
+            raise Exception(f"Invalid url: {url}")
+
+        i = ImageOps.exif_transpose(i)
+        has_alpha = "A" in i.getbands()
+        mask = None
+
+        if "RGB" not in i.mode:
+            i = i.convert("RGBA") if has_alpha else i.convert("RGB")
+
+        if has_alpha:
+            mask = i.getchannel("A")
+
+            # recreate image to fix weird RGB image
+            alpha = i.split()[-1]
+            image = Image.new("RGB", i.size, (0, 0, 0))
+            image.paste(i, mask=alpha)
+            image.putalpha(alpha)
+
+            if not keep_alpha_channel:
+                image = image.convert("RGB")
+        else:
+            image = i
+
+        images.append(image)
+        masks.append(mask)
+
+    return (images, masks)
+
+
 class UtilLoadImageFromUrl:
     def __init__(self) -> None:
         self.output_dir = folder_paths.get_temp_directory()
@@ -71,81 +144,9 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image_from_url(self, urls: List[str], keep_alpha_channel=False):
-        images = []
-        masks = []
-
-        for url in urls:
-            if url.startswith("data:image/"):
-                i = Image.open(io.BytesIO(base64.b64decode(url.split(",")[1])))
-            elif url.startswith("file://"):
-                url = url[7:]
-                if not os.path.isfile(url):
-                    raise Exception(f"File {url} does not exist")
-
-                i = Image.open(url)
-            elif url.startswith("http://") or url.startswith("https://"):
-                response = requests.get(url, timeout=5)
-                if response.status_code != 200:
-                    raise Exception(response.text)
-
-                i = Image.open(io.BytesIO(response.content))
-            elif url.startswith("/view?"):
-                from urllib.parse import parse_qs
-
-                qs = parse_qs(url[6:])
-                filename = qs.get("name", qs.get("filename", None))
-                if filename is None:
-                    raise Exception(f"Invalid url: {url}")
-
-                filename = filename[0]
-                subfolder = qs.get("subfolder", None)
-                if subfolder is not None:
-                    filename = os.path.join(subfolder[0], filename)
-
-                dirtype = qs.get("type", ["input"])
-                if dirtype[0] == "input":
-                    url = os.path.join(folder_paths.get_input_directory(), filename)
-                elif dirtype[0] == "output":
-                    url = os.path.join(folder_paths.get_output_directory(), filename)
-                elif dirtype[0] == "temp":
-                    url = os.path.join(folder_paths.get_temp_directory(), filename)
-                else:
-                    raise Exception(f"Invalid url: {url}")
-
-                i = Image.open(url)
-            else:
-                raise Exception(f"Invalid url: {url}")
-
-            i = ImageOps.exif_transpose(i)
-            has_alpha = "A" in i.getbands()
-            mask = None
-
-            if "RGB" not in i.mode:
-                i = i.convert("RGBA") if has_alpha else i.convert("RGB")
-
-            if has_alpha:
-                mask = i.getchannel("A")
-
-                # recreate image to fix weird RGB image
-                alpha = i.split()[-1]
-                image = Image.new("RGB", i.size, (0, 0, 0))
-                image.paste(i, mask=alpha)
-                image.putalpha(alpha)
-
-                if not keep_alpha_channel:
-                    image = image.convert("RGB")
-            else:
-                image = i
-
-            images.append(image)
-            masks.append(mask)
-
-        return (images, masks)
-
     def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
         urls = url.strip().split("\n")
-        images, masks = self.load_image_from_url(urls, keep_alpha_channel)
+        images, masks = load_images_from_url(urls, keep_alpha_channel)
 
         previews = []
         np_images = []
@@ -198,7 +199,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
 
     def load_image(self, url: str, channel: str):
         urls = url.strip().split("\n")
-        images, alphas = self.load_image_from_url([urls], False)
+        images, alphas = load_images_from_url([urls], False)
 
         masks = []
 

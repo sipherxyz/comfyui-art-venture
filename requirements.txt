@@ -6,3 +6,4 @@ opencv-python
 qrcode[pil]
 pytorch_lightning
 kornia
+pydantic
