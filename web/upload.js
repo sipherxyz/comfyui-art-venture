@@ -42,7 +42,7 @@ function injectHidden(widget) {
   });
 }
 
-function useKVState(nodeType) {
+function addKVState(nodeType) {
   chainCallback(nodeType.prototype, "onNodeCreated", function () {
     chainCallback(this, "onConfigure", function (info) {
       if (!this.widgets) {
@@ -558,6 +558,14 @@ function addImagePreview(nodeType) {
 
   nodeType.prototype.onDrawBackground = function (ctx) {
     if (!this.flags.collapsed) {
+      const output = app.nodeOutputs[this.id + ""];
+      if (output && output.images) {
+        if (JSON.stringify(this.images) !== output.images) {
+          this.images = output.images.map(formatUploadedUrl);
+          delete output.images
+        }
+      }
+
       let imageURLs = this.images ?? []
       let imagesChanged = false
 
@@ -850,9 +858,9 @@ app.registerExtension({
       return
     }
 
-    useKVState(nodeType);
+    addKVState(nodeType);
 
-    if (nodeData.name == "LoadImageFromUrl") {
+    if (nodeData.name === "LoadImageFromUrl" || nodeData.name === "LoadImageAsMaskFromUrl") {
       addUploadWidget(nodeType, "url", "image");
       addImagePreview(nodeType)
     } else if (nodeData.name == "LoadVideoFromUrl") {
