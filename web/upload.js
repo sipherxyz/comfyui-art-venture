@@ -145,7 +145,7 @@ async function uploadFile(file) {
       body,
     });
 
-    if (resp.status === 200) {
+    if (resp.status === 200 || resp.status === 201) {
       return resp.json()
     } else {
       alert(`Upload failed: ${resp.statusText}`);
@@ -871,3 +871,4 @@ app.registerExtension({
     }
   }
 });
+  
