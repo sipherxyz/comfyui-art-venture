@@ -217,7 +217,7 @@ try:
                 if noise > 0:
                     clip_embed_zeroed = clip_vision.encode_image(neg_image).penultimate_hidden_states
                 else:
-                    clip_embed_zeroed = zeroed_hidden_states(clip_vision, image.shape[0])
+                    clip_embed_zeroed = zeroed_hidden_states(clip_vision, images.shape[0])
             else:
                 clip_embed = clip_embed.image_embeds
                 if noise > 0:
