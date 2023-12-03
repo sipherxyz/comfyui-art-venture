@@ -39,7 +39,7 @@ def apply_preprocessor(image, preprocessor, resolution=512):
     resolution_idx = list(optional_args).index("resolution")
     default_args.insert(resolution_idx, resolution)
     default_args.insert(0, image)
-    
+
     preprocessor_args = {key: default_args[i] for i, key in enumerate(required_args)}
     preprocessor_args.update({key: default_args[i + len(required_args)] for i, key in enumerate(optional_args)})
 
@@ -157,6 +157,7 @@ class AVControlNetEfficientStacker:
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+                "enabled": ("BOOLEAN", {"default": True}),
             },
         }
 
@@ -177,7 +178,11 @@ class AVControlNetEfficientStacker:
         control_net_override="None",
         timestep_keyframe=None,
         resolution=512,
+        enabled=True,
     ):
+        if not enabled:
+            return (cnet_stack,)
+
         # If control_net_stack is None, initialize as an empty list
         if cnet_stack is None:
             cnet_stack = []
@@ -210,6 +215,7 @@ class AVControlNetEfficientStackerSimple(AVControlNetEfficientStacker):
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+                "enabled": ("BOOLEAN", {"default": True}),
             },
         }
 
@@ -244,6 +250,7 @@ class AVControlNetEfficientLoader(ControlNetApply):
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+                "enabled": ("BOOLEAN", {"default": True}),
             },
         }
 
@@ -261,7 +268,11 @@ class AVControlNetEfficientLoader(ControlNetApply):
         control_net_override="None",
         timestep_keyframe=None,
         resolution=512,
+        enabled=True,
     ):
+        if not enabled:
+            return (conditioning,)
+
         control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
         if control_net is None:
             return (conditioning,)
@@ -295,6 +306,7 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
                 "control_net_override": ("STRING", {"default": "None"}),
                 "timestep_keyframe": ("TIMESTEP_KEYFRAME",),
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
+                "enabled": ("BOOLEAN", {"default": True}),
             },
         }
 
@@ -316,7 +328,11 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
         control_net_override="None",
         timestep_keyframe=None,
         resolution=512,
+        enabled=True,
     ):
+        if not enabled:
+            return (positive, negative)
+
         control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
         if control_net is None:
             return (positive, negative)

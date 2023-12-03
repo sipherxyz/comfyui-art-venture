@@ -51,6 +51,8 @@ try:
     class UtilLoadVideoFromUrl(LoadVideoPath):
         CATEGORY = "Art Venture/Loaders"
         FUNCTION = "load"
+        RETURN_TYPES = ("IMAGE", "INT", "BOOLEAN")
+        RETURN_NAMES = ("IMAGE", "frame_count", "has_video")
 
         def load_gif(
             self,
@@ -98,6 +100,10 @@ try:
         def load(self, video: str, **kwargs):
             url = video.strip('"')
 
+            if url == "":
+                image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
+                return (image, 1, False)
+
             if os.path.isfile(url):
                 pass
             elif url.startswith("file://"):
@@ -120,10 +126,10 @@ try:
                     tempdir = os.path.join(temp_dir, "video")
                     if not os.path.exists(tempdir):
                         os.makedirs(tempfile, exist_ok=True)
-                    
+
                     filename = os.path.basename(url)
                     filepath = os.path.join(tempdir, filename)
-                    
+
                     i = 1
                     split = os.path.splitext(filename)
                     while os.path.exists(filepath):
@@ -168,9 +174,11 @@ try:
 
             if ".gif [" in video.lower() or ".webp [" in video.lower():
                 gif_path = folder_paths.get_annotated_filepath(video.strip('"'))
-                return self.load_gif(gif_path, **kwargs)
+                res = self.load_gif(gif_path, **kwargs)
+            else:
+                res = self.load_video(video=video, **kwargs)
 
-            return self.load_video(video=video, **kwargs)
+            return res + (True,)
 
         @classmethod
         def IS_CHANGED(s, video: str, **kwargs):

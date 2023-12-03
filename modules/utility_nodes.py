@@ -85,6 +85,8 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
                 raise Exception(f"Invalid url: {url}")
 
             i = Image.open(url)
+        elif url == "":
+            continue
         else:
             raise Exception(f"Invalid url: {url}")
 
@@ -138,15 +140,19 @@ class UtilLoadImageFromUrl:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK")
-    OUTPUT_IS_LIST = (True, True)
-    RETURN_NAMES = ("images", "masks")
+    RETURN_TYPES = ("IMAGE", "MASK", "BOOLEAN")
+    OUTPUT_IS_LIST = (True, True, False)
+    RETURN_NAMES = ("images", "masks", "has_image")
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
     def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
         urls = url.strip().split("\n")
         images, masks = load_images_from_url(urls, keep_alpha_channel)
+        if len(images) == 0:
+            image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
+            mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+            return ([image], [mask], False)
 
         previews = []
         np_images = []
@@ -168,18 +174,19 @@ class UtilLoadImageFromUrl:
             np_masks.append(mask.unsqueeze(0))
 
         if output_mode:
-            result = (np_images, np_masks)
+            result = (np_images, np_masks, True)
         else:
             has_size_mismatch = False
-            for image in np_images[1:]:
-                if image.shape[1] != np_images[0].shape[1] or image.shape[2] != np_images[0].shape[2]:
-                    has_size_mismatch = True
-                    break
+            if len(np_images) > 1:
+                for image in np_images[1:]:
+                    if image.shape[1] != np_images[0].shape[1] or image.shape[2] != np_images[0].shape[2]:
+                        has_size_mismatch = True
+                        break
 
             if has_size_mismatch:
                 raise Exception("To output as batch, images must have the same size. Use list output mode instead.")
 
-            result = ([torch.cat(np_images)], [torch.cat(np_masks)])
+            result = ([torch.cat(np_images)], [torch.cat(np_masks)], True)
 
         return {"ui": {"images": previews}, "result": result}
 

@@ -95,6 +95,8 @@ try:
                 "optional": {
                     "ip_adapter_opt": ("IPADAPTER",),
                     "clip_vision_opt": ("CLIP_VISION",),
+                    "start_at": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
+                    "end_at": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
                     "enabled": ("BOOLEAN", {"default": True}),
                 },
             }
@@ -114,6 +116,7 @@ try:
             ip_adapter_opt=None,
             clip_vision_opt=None,
             enabled=True,
+            **kwargs,
         ):
             if not enabled:
                 return (model, None, None)
@@ -133,7 +136,7 @@ try:
                 clip_vision = comfy.clip_vision.load(clip_path)
 
             res: Tuple = super().apply_ipadapter(
-                ip_adapter, model, weight, clip_vision=clip_vision, image=image, noise=noise
+                ip_adapter, model, weight, clip_vision=clip_vision, image=image, noise=noise, **kwargs
             )
             res += (ip_adapter, clip_vision)
 
@@ -251,6 +254,8 @@ try:
                 "optional": {
                     "ip_adapter_opt": ("IPADAPTER",),
                     "attn_mask": ("MASK",),
+                    "start_at": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
+                    "end_at": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
                     "enabled": ("BOOLEAN", {"default": True}),
                 },
             }
