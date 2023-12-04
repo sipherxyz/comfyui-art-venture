@@ -51,6 +51,38 @@ def apply_preprocessor(image, preprocessor, resolution=512):
     return res[0]
 
 
+def detect_controlnet(preprocessor: str, sd_version: str):
+    controlnets = folder_paths.get_filename_list("controlnet")
+    controlnets = filter(lambda x: sd_version in x, controlnets)
+    if sd_version == "sdxl":
+        controlnets = filter(lambda x: "sdxl_t2i" not in x, controlnets)
+
+    control_net_name = "None"
+    if preprocessor in {"canny", "scribble", "mlsd"}:
+        control_net_name = next((c for c in controlnets if preprocessor in c), "None")
+    if preprocessor in {"scribble", "scribble_hed"}:
+        control_net_name = next((c for c in controlnets if "scribble" in c), "None")
+    if preprocessor in {"lineart", "lineart_coarse"}:
+        control_net_name = next((c for c in controlnets if "lineart." in c), "None")
+    if preprocessor in {"lineart_anime", "lineart_manga"}:
+        control_net_name = next((c for c in controlnets if "lineart_anime" in c), "None")
+    if preprocessor in {"hed", "hed_safe", "pidi", "pidi_safe"}:
+        control_net_name = next((c for c in controlnets if "softedge" in c), "None")
+    if preprocessor in {"pose", "openpose", "dwpose"}:
+        control_net_name = next((c for c in controlnets if "openpose" in c), "None")
+    if preprocessor in {"normalmap_bae", "normalmap_midas"}:
+        control_net_name = next((c for c in controlnets if "normalbae" in c), "None")
+    if preprocessor in {"depth", "depth_midas", "depth_zoe"}:
+        control_net_name = next((c for c in controlnets if "depth" in c), "None")
+    if preprocessor in {"seg_ofcoco", "seg_ofade20k", "seg_ufade20k"}:
+        control_net_name = next((c for c in controlnets if "seg" in c), "None")
+
+    if preprocessor in {"tile"}:
+        control_net_name = next((c for c in controlnets if "tile" in c), "None")
+
+    return control_net_name
+
+
 class AVControlNetLoader(ControlNetLoader):
     @classmethod
     def INPUT_TYPES(s):
@@ -102,34 +134,7 @@ class AV_ControlNetPreprocessor:
                 preprocessor = preprocessor_override
 
         image = apply_preprocessor(image, preprocessor, resolution=resolution)
-
-        controlnets = folder_paths.get_filename_list("controlnet")
-        controlnets = filter(lambda x: sd_version in x, controlnets)
-        if sd_version == "sdxl":
-            controlnets = filter(lambda x: "sdxl_t2i" not in x, controlnets)
-
-        control_net_name = "None"
-        if preprocessor in {"canny", "scribble", "mlsd"}:
-            control_net_name = next((c for c in controlnets if preprocessor in c), "None")
-        if preprocessor in {"scribble", "scribble_hed"}:
-            control_net_name = next((c for c in controlnets if "scribble" in c), "None")
-        if preprocessor in {"lineart", "lineart_coarse"}:
-            control_net_name = next((c for c in controlnets if "lineart." in c), "None")
-        if preprocessor in {"lineart_anime", "lineart_manga"}:
-            control_net_name = next((c for c in controlnets if "lineart_anime" in c), "None")
-        if preprocessor in {"hed", "hed_safe", "pidi", "pidi_safe"}:
-            control_net_name = next((c for c in controlnets if "softedge" in c), "None")
-        if preprocessor in {"pose", "openpose", "dwpose"}:
-            control_net_name = next((c for c in controlnets if "openpose" in c), "None")
-        if preprocessor in {"normalmap_bae", "normalmap_midas"}:
-            control_net_name = next((c for c in controlnets if "normalbae" in c), "None")
-        if preprocessor in {"depth", "depth_midas", "depth_zoe"}:
-            control_net_name = next((c for c in controlnets if "depth" in c), "None")
-        if preprocessor in {"seg_ofcoco", "seg_ofade20k", "seg_ufade20k"}:
-            control_net_name = next((c for c in controlnets if "seg" in c), "None")
-
-        if preprocessor in {"tile"}:
-            control_net_name = next((c for c in controlnets if "tile" in c), "None")
+        control_net_name = detect_controlnet(preprocessor, sd_version)
 
         return (image, control_net_name)
 
@@ -142,7 +147,7 @@ class AVControlNetEfficientStacker:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "control_net_name": (["None"] + s.controlnets,),
+                "control_net_name": (["None", "Auto: sd15", "Auto: sdxl", "Auto: sdxl_t2i"] + s.controlnets,),
                 "image": ("IMAGE",),
                 "strength": (
                     "FLOAT",
@@ -168,7 +173,7 @@ class AVControlNetEfficientStacker:
 
     def control_net_stacker(
         self,
-        control_net_name,
+        control_net_name: str,
         image,
         strength,
         start_percent,
@@ -187,6 +192,12 @@ class AVControlNetEfficientStacker:
         if cnet_stack is None:
             cnet_stack = []
 
+        if control_net_name.startswith("Auto: "):
+            assert preprocessor != "None", "preprocessor must be set when using Auto mode"
+
+            sd_version = control_net_name[len("Auto: ") :]
+            control_net_name = detect_controlnet(preprocessor, sd_version)
+
         control_net = load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
 
         # Extend the control_net_stack with the new tuple
@@ -202,7 +213,7 @@ class AVControlNetEfficientStackerSimple(AVControlNetEfficientStacker):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "control_net_name": (["None"] + s.controlnets,),
+                "control_net_name": (["None", "Auto: sd15", "Auto: sdxl", "Auto: sdxl_t2i"] + s.controlnets,),
                 "image": ("IMAGE",),
                 "strength": (
                     "FLOAT",
