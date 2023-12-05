@@ -4,7 +4,7 @@ import torch
 import folder_paths
 from comfy.utils import common_upscale
 
-from ..utils import load_module, calculate_file_hash, pil2tensor
+from ..utils import load_module, pil2tensor
 
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
 video_dir_names = ["VideoHelperSuite", "ComfyUI-VideoHelperSuite"]
@@ -49,10 +49,17 @@ try:
         return (width, height)
 
     class UtilLoadVideoFromUrl(LoadVideoPath):
+        @classmethod
+        def INPUT_TYPES(s):
+            inputs = LoadVideoPath.INPUT_TYPES()
+            inputs["required"]["video"] = ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False})
+            return inputs
+
         CATEGORY = "Art Venture/Loaders"
         FUNCTION = "load"
         RETURN_TYPES = ("IMAGE", "INT", "BOOLEAN")
-        RETURN_NAMES = ("IMAGE", "frame_count", "has_video")
+        RETURN_NAMES = ("frames", "frame_count", "has_video")
+        OUTPUT_IS_LIST = (True, True, False)
 
         def load_gif(
             self,
@@ -97,12 +104,11 @@ try:
 
             return (images, len(frames))
 
-        def load(self, video: str, **kwargs):
+        def load_url(self, video: str, **kwargs):
             url = video.strip('"')
 
             if url == "":
-                image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
-                return (image, 1, False)
+                return (None, 0)
 
             if os.path.isfile(url):
                 pass
@@ -178,14 +184,31 @@ try:
             else:
                 res = self.load_video(video=video, **kwargs)
 
-            return res + (True,)
+            return res
+
+        def load(self, video: str, **kwargs):
+            urls = video.strip().split("\n")
+
+            videos = []
+            frame_counts = []
+
+            for url in urls:
+                images, frame_count = self.load_url(url, **kwargs)
+                if images is not None and frame_count > 0:
+                    videos.append(images)
+                    frame_counts.append(frame_count)
+
+            has_video = len(videos) > 0
+            if not has_video:
+                image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
+                videos.append(image)
+                frame_counts.append(1)
+
+            return (videos, frame_counts, has_video)
 
         @classmethod
         def IS_CHANGED(s, video: str, **kwargs):
-            if os.path.isfile(video.strip('"')):
-                return calculate_file_hash(video.strip('"'))
-            else:
-                return video
+            return video
 
         @classmethod
         def VALIDATE_INPUTS(s, **kwargs):
