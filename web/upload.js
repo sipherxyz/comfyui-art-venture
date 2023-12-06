@@ -1,7 +1,7 @@
 import { app, ANIM_PREVIEW_WIDGET } from '../../../scripts/app.js';
 import { api } from '../../../scripts/api.js';
 import { $el } from '../../../scripts/ui.js';
-import { createImageHost } from "../../../scripts/ui/imagePreview.js"
+import { createImageHost } from '../../../scripts/ui/imagePreview.js';
 
 const style = `
 .comfy-img-preview video {
@@ -323,7 +323,7 @@ function addUploadWidget(nodeType, widgetName, type) {
   });
 }
 
-function addVideoPreview(nodeType) {
+function addVideoPreview(nodeType, options = {}) {
   const createVideoNode = (url) => {
     return new Promise((cb) => {
       const videoEl = document.createElement('video');
@@ -366,7 +366,9 @@ function addVideoPreview(nodeType) {
   nodeType.prototype.onDrawBackground = function (ctx) {
     if (this.flags.collapsed) return;
 
-    let imageURLs = this.images ?? [];
+    let imageURLs = (this.images ?? []).map((i) =>
+      typeof i === 'string' ? i : formatUploadedUrl(i),
+    );
     let imagesChanged = false;
 
     if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
@@ -440,46 +442,81 @@ function addVideoPreview(nodeType) {
       });
   };
 
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === 'video');
-    pathWidget._value = pathWidget.value;
-    Object.defineProperty(pathWidget, 'value', {
-      set: (value) => {
-        pathWidget._value = value;
-        pathWidget.inputEl.value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      },
-      get: () => {
-        return pathWidget._value;
-      },
-    });
-    pathWidget.inputEl.addEventListener('change', (e) => {
-      const value = e.target.value;
-      pathWidget._value = value;
-      this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-    });
+  const { textWidget, comboWidget } = options;
 
-    // Set value to ensure preview displays on initial add.
-    pathWidget.value = pathWidget._value;
+  if (textWidget) {
+    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
+      const pathWidget = this.widgets.find((w) => w.name === textWidget);
+      pathWidget._value = pathWidget.value;
+      Object.defineProperty(pathWidget, 'value', {
+        set: (value) => {
+          pathWidget._value = value;
+          pathWidget.inputEl.value = value;
+          this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
+        },
+        get: () => {
+          return pathWidget._value;
+        },
+      });
+      pathWidget.inputEl.addEventListener('change', (e) => {
+        const value = e.target.value;
+        pathWidget._value = value;
+        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
+      });
+
+      // Set value to ensure preview displays on initial add.
+      pathWidget.value = pathWidget._value;
+    });
+  }
+
+  if (comboWidget) {
+    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
+      const pathWidget = this.widgets.find((w) => w.name === comboWidget);
+      pathWidget._value = pathWidget.value;
+      Object.defineProperty(pathWidget, 'value', {
+        set: (value) => {
+          pathWidget._value = value;
+          if (!value) {
+            return this.images = []
+          }
+
+          const parts = value.split("/")
+          const filename = parts.pop()
+          const subfolder = parts.join("/")
+          const extension = filename.split(".").pop();
+          const format = (["gif", "webp", "avif"].includes(extension)) ? 'image' : 'video'
+          this.images = [formatUploadedUrl({ filename, subfolder, type: "input", format: format })]
+        },
+        get: () => {
+          return pathWidget._value;
+        },
+      });
+      pathWidget.inputEl.addEventListener('change', (e) => {
+        const value = e.target.value;
+        pathWidget._value = value;
+        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
+      });
+
+      // Set value to ensure preview displays on initial add.
+      pathWidget.value = pathWidget._value;
+    });
+  }
+
+  chainCallback(nodeType.prototype, "onExecuted", function (message) {
+    if (message?.videos) {
+      this.images = message?.videos.map(formatUploadedUrl);
+    }
   });
 }
 
-function addImagePreview(nodeType) {
+function addImagePreview(nodeType, widgetName) {
   const onDrawBackground = nodeType.prototype.onDrawBackground;
   nodeType.prototype.onDrawBackground = function (ctx) {
-    if (this.flags.collapsed) {
-      return;
-    }
+    if (this.flags.collapsed) return;
 
-    const output = app.nodeOutputs[this.id + ''];
-    if (output && output.images) {
-      if (JSON.stringify(this.images) !== output.images) {
-        this.images = output.images.map(formatUploadedUrl);
-        delete output.images;
-      }
-    }
-
-    let imageURLs = this.images ?? [];
+    let imageURLs = (this.images ?? []).map((i) =>
+      typeof i === 'string' ? i : formatUploadedUrl(i),
+    );
     let imagesChanged = false;
 
     if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
@@ -513,7 +550,7 @@ function addImagePreview(nodeType) {
   };
 
   chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === 'url');
+    const pathWidget = this.widgets.find((w) => w.name === widgetName);
     pathWidget._value = pathWidget.value;
     Object.defineProperty(pathWidget, 'value', {
       set: (value) => {
@@ -554,11 +591,11 @@ app.registerExtension({
 
     if (nodeData.name === 'LoadImageFromUrl' || nodeData.name === 'LoadImageAsMaskFromUrl') {
       addUploadWidget(nodeType, 'url', 'image');
-      addImagePreview(nodeType);
+      addImagePreview(nodeType, 'url');
     } else if (nodeData.name == 'LoadVideoFromUrl') {
       addVideoCustomSize(nodeType, nodeData, 'force_size');
       addUploadWidget(nodeType, 'video', 'video');
-      addVideoPreview(nodeType);
+      addVideoPreview(nodeType, { textWidget: 'video' });
     }
   },
 });
