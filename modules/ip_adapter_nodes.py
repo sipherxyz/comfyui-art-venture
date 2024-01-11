@@ -1,7 +1,6 @@
 import os
 import json
 import torch
-import contextlib
 import torchvision.transforms as TT
 from typing import Dict, Tuple, List
 from pydantic import BaseModel
@@ -17,10 +16,6 @@ from .utility_nodes import load_images_from_url
 
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
 ip_adapter_dir_names = ["IPAdapter", "ComfyUI_IPAdapter_plus"]
-
-legacy_model_dir = os.path.join(folder_paths.models_dir, "ip_adapter")
-model_dir = os.path.join(folder_paths.models_dir, "ipadapter")
-folder_paths.folder_names_and_paths["ip_adapter"] = ([legacy_model_dir, model_dir], folder_paths.supported_pt_extensions)
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
@@ -44,6 +39,7 @@ try:
     nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
     IPAdapterApply = nodes.get("IPAdapterApply")
     IPAdapterApplyEncoded = nodes.get("IPAdapterApplyEncoded")
+    IPAdapterModelLoader = nodes.get("IPAdapterModelLoader")
 
     # from IPAdapter_Plus
     def image_add_noise(image: torch.Tensor, noise: float):
@@ -66,27 +62,18 @@ try:
     def zeroed_hidden_states(clip_vision, batch_size):
         image = torch.zeros([batch_size, 224, 224, 3])
         comfy.model_management.load_model_gpu(clip_vision.patcher)
-        pixel_values = comfy.clip_vision.clip_preprocess(image.to(clip_vision.load_device))
-
-        if clip_vision.dtype != torch.float32:
-            precision_scope = torch.autocast
-        else:
-            precision_scope = lambda a, b: contextlib.nullcontext(a)
-
-        with precision_scope(comfy.model_management.get_autocast_device(clip_vision.load_device), torch.float32):
-            outputs = clip_vision.model(pixel_values, output_hidden_states=True)
-
+        pixel_values = comfy.clip_vision.clip_preprocess(image.to(clip_vision.load_device)).float()
+        outputs = clip_vision.model(pixel_values=pixel_values, intermediate_output=-2)
         # we only need the penultimate hidden states
-        outputs = outputs["hidden_states"][-2].cpu() if "hidden_states" in outputs else None
-
+        outputs = outputs[1].to(comfy.model_management.intermediate_device())
         return outputs
 
-    class AV_IPAdapter(IPAdapterApply):
+    class AV_IPAdapter(IPAdapterModelLoader, IPAdapterApply):
         @classmethod
         def INPUT_TYPES(cls):
             return {
                 "required": {
-                    "ip_adapter_name": (["None"] + folder_paths.get_filename_list("ip_adapter"),),
+                    "ip_adapter_name": (["None"] + folder_paths.get_filename_list("ipadapter"),),
                     "clip_name": (["None"] + folder_paths.get_filename_list("clip_vision"),),
                     "model": ("MODEL",),
                     "image": ("IMAGE",),
@@ -126,8 +113,7 @@ try:
                 ip_adapter = ip_adapter_opt
             else:
                 assert ip_adapter_name != "None", "IP Adapter name must be specified"
-                ip_adapter_path = folder_paths.get_full_path("ip_adapter", ip_adapter_name)
-                ip_adapter = comfy.utils.load_torch_file(ip_adapter_path, safe_load=True)
+                ip_adapter = super().load_ipadapter_model(ip_adapter_name)
 
             if clip_vision_opt:
                 clip_vision = clip_vision_opt
@@ -182,7 +168,7 @@ try:
             data: IPAdapterData = IPAdapterData(images=data)  # validate
 
             if len(data.images) == 0:
-                images = torch.zeros((1, 64, 46, 3))
+                images = torch.zeros((1, 64, 64, 3))
                 return (None, images, None, False)
 
             urls = [image.url for image in data.images]
@@ -246,7 +232,7 @@ try:
         def INPUT_TYPES(cls):
             return {
                 "required": {
-                    "ip_adapter_name": (["None"] + folder_paths.get_filename_list("ip_adapter"),),
+                    "ip_adapter_name": (["None"] + folder_paths.get_filename_list("ipadapter"),),
                     "embeds": ("EMBEDS",),
                     "model": ("MODEL",),
                     "weight": ("FLOAT", {"default": 1.0, "min": -1, "max": 3, "step": 0.05}),
