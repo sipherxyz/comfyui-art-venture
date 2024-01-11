@@ -18,8 +18,9 @@ from .utility_nodes import load_images_from_url
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
 ip_adapter_dir_names = ["IPAdapter", "ComfyUI_IPAdapter_plus"]
 
-model_dir = os.path.join(folder_paths.models_dir, "ip_adapter")
-folder_paths.folder_names_and_paths["ip_adapter"] = ([model_dir], folder_paths.supported_pt_extensions)
+legacy_model_dir = os.path.join(folder_paths.models_dir, "ip_adapter")
+model_dir = os.path.join(folder_paths.models_dir, "ipadapter")
+folder_paths.folder_names_and_paths["ip_adapter"] = ([legacy_model_dir, model_dir], folder_paths.supported_pt_extensions)
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
