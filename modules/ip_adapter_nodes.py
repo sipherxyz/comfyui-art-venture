@@ -113,7 +113,7 @@ try:
                 ip_adapter = ip_adapter_opt
             else:
                 assert ip_adapter_name != "None", "IP Adapter name must be specified"
-                ip_adapter = super().load_ipadapter_model(ip_adapter_name)
+                ip_adapter = super().load_ipadapter_model(ip_adapter_name)[0]
 
             if clip_vision_opt:
                 clip_vision = clip_vision_opt
@@ -227,7 +227,7 @@ try:
 
             return (embeds, images, clip_vision, True)
 
-    class AV_IPAdapterApplyEncoded(IPAdapterApplyEncoded):
+    class AV_IPAdapterApplyEncoded(IPAdapterModelLoader, IPAdapterApplyEncoded):
         @classmethod
         def INPUT_TYPES(cls):
             return {
@@ -259,8 +259,7 @@ try:
                 ip_adapter = ip_adapter_opt
             else:
                 assert ip_adapter_name != "None", "IP Adapter name must be specified"
-                ip_adapter_path = folder_paths.get_full_path("ip_adapter", ip_adapter_name)
-                ip_adapter = comfy.utils.load_torch_file(ip_adapter_path, safe_load=True)
+                ip_adapter = super().load_ipadapter_model(ip_adapter_name)[0]
 
             res: Tuple = super().apply_ipadapter(ip_adapter, model, **kwargs)
             res += (ip_adapter,)
