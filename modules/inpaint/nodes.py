@@ -22,6 +22,8 @@ class PrepareImageAndMaskForInpaint:
                 "mask_blur": ("INT", {"default": 4, "min": 0, "max": 64}),
                 "inpaint_masked": ("BOOLEAN", {"default": False}),
                 "mask_padding": ("INT", {"default": 32, "min": 0, "max": 256}),
+                "width": ("INT", {"default": 0, "min": 0, "max": 2048}),
+                "height": ("INT", {"default": 0, "min": 0, "max": 2048}),
             }
         }
 
@@ -38,6 +40,8 @@ class PrepareImageAndMaskForInpaint:
         mask_blur: int,
         inpaint_masked: bool,
         mask_padding: int,
+        width: int,
+        height: int,
     ):
         if image.shape[0] != mask.shape[0]:
             raise ValueError("image and mask must have same batch size")
@@ -45,7 +49,10 @@ class PrepareImageAndMaskForInpaint:
         if image.shape[1] != mask.shape[1] or image.shape[2] != mask.shape[2]:
             raise ValueError("image and mask must have same dimensions")
 
-        height, width = image.shape[1:3]
+        if width == 0 and height == 0:
+            height, width = image.shape[1:3]
+            
+        sourceheight, sourcewidth = image.shape[1:3]
 
         masks = []
         images = []
@@ -65,7 +72,7 @@ class PrepareImageAndMaskForInpaint:
 
             if inpaint_masked:
                 crop_region = get_crop_region(np_mask, mask_padding)
-                crop_region = expand_crop_region(crop_region, width, height, width, height)
+                crop_region = expand_crop_region(crop_region, width, height, sourcewidth, sourceheight)
                 # crop mask
                 overlay_mask = pil_mask
                 pil_mask = resize_image(pil_mask.crop(crop_region), width, height, ResizeMode.RESIZE_TO_FIT)
