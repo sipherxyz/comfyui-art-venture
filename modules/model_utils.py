@@ -2,6 +2,7 @@ import os
 import re
 import torch
 from urllib.parse import urlparse
+from typing import Union
 
 
 def natural_sort_key(s, regex=re.compile("([0-9]+)")):
@@ -37,7 +38,7 @@ def load_file_from_url(
     *,
     model_dir: str,
     progress: bool = True,
-    file_name: str | None = None,
+    file_name: Union[str, None] = None,
 ) -> str:
     """Download a file from `url` into `model_dir`, using the file present if possible.
 
