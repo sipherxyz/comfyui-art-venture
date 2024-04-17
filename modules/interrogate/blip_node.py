@@ -170,7 +170,7 @@ class BlipCaption:
         self, image, min_length, max_length, device_mode="AUTO", prefix="", suffix="", enabled=True, blip_model=None
     ):
         if not enabled:
-            return (join_caption("", prefix, suffix),)
+            return ([join_caption("", prefix, suffix)],)
 
         if blip_model is None:
             ckpts = folder_paths.get_filename_list("blip")
