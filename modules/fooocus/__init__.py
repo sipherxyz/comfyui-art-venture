@@ -23,10 +23,10 @@ class KSamplerWithSharpness(KSampler):
     CATEGORY = "Art Venture/Sampling"
 
     def sample(self, *args, sharpness=2.0, **kwargs):
-        # patch.sharpness = sharpness
-        # patch_all()
+        patch.sharpness = sharpness
+        patch_all()
         results = super().sample(*args, **kwargs)
-        # unpatch_all()
+        unpatch_all()
         return results
 
 
@@ -46,10 +46,10 @@ class KSamplerAdvancedWithSharpness(KSamplerAdvanced):
     CATEGORY = "Art Venture/Sampling"
 
     def sample(self, *args, sharpness=2.0, **kwargs):
-        # patch.sharpness = sharpness
-        # patch_all()
+        patch.sharpness = sharpness
+        patch_all()
         results = super().sample(*args, **kwargs)
-        # unpatch_all()
+        unpatch_all()
         return results
 
 
