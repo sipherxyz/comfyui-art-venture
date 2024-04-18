@@ -155,7 +155,7 @@ try:
 
             if clip_vision_opt:
                 clip_vision = clip_vision_opt
-            elif "clipvision" in ip_adapter_opt:
+            elif ip_adapter_opt and "clipvision" in ip_adapter_opt:
                 clip_vision = ip_adapter_opt["clipvision"]["model"]
             else:
                 assert clip_name != "None", "Clip vision name must be specified"
