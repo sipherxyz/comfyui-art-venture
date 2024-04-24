@@ -30,7 +30,7 @@ try:
         raise Exception("Could not find efficiency nodes")
 
     module = load_module(module_path)
-    print("Loaded efficiency nodes from", module_path)
+    print("Loaded Efficiency nodes from", module_path)
 
     nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
 

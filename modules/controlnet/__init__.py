@@ -55,7 +55,8 @@ def detect_controlnet(preprocessor: str, sd_version: str):
     controlnets = folder_paths.get_filename_list("controlnet")
     controlnets = filter(lambda x: sd_version in x, controlnets)
     if sd_version == "sdxl":
-        controlnets = filter(lambda x: "sdxl_t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "lllite" not in x, controlnets)
 
     control_net_name = "None"
     if preprocessor in {"canny", "scribble", "mlsd"}:
@@ -111,7 +112,7 @@ class AV_ControlNetPreprocessor:
             "required": {
                 "image": ("IMAGE",),
                 "preprocessor": (["None", "tile"] + s.preprocessors,),
-                "sd_version": (["sd15", "sdxl", "sdxl_t2i"],),
+                "sd_version": (["sd15", "sd15++", "sdxl", "sdxl_t2i", "sdxl_lllite"],),
             },
             "optional": {
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
