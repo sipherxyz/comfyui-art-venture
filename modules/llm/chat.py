@@ -97,13 +97,16 @@ class ClaudeApi:
         self.client = Anthropic(api_key=claude_api_key, base_url=endpoint)
 
     def completion(self, messages: List[LLMMessage], config: LLMConfig):
-        formated_messages = [m.to_claude_message() for m in messages]
+        system_message = [m for m in messages if m.role == "system"]
+        user_messages = [m for m in messages if m.role != "system"]
+        formated_messages = [m.to_claude_message() for m in user_messages]
 
         response = self.client.messages.create(
             messages=formated_messages,
             model=config.model,
             max_tokens=config.max_token,
             temperature=config.temperature,
+            system=system_message[0].text if len(system_message) > 0 else None,
         )
         content = response.content[0].text
 
@@ -196,9 +199,17 @@ class LLMMessageNode:
     FUNCTION = "make_message"
     CATEGORY = "ArtVenture/LLM"
 
-    def make_message(self, role, text, image=None, messages=None):
+    def make_message(self, role, text, image: Optional[Tensor] = None, messages: Optional[List[LLMMessage]] = None):
         if messages is None:
             messages = []
+
+        if role == "system":
+            if isinstance(image, Tensor):
+                raise Exception("System prompt does not support image.")
+
+            system_message = [m for m in messages if m.role == "system"]
+            if len(system_message) > 0:
+                raise Exception("Only one system prompt is allowed.")
 
         if isinstance(image, Tensor):
             pil = tensor2pil(image)
