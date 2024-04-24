@@ -1,7 +1,8 @@
 import os
 from enum import Enum
+from torch import Tensor
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Union, Optional
 
 from ..utils import tensor2pil, pil2base64
 
@@ -36,38 +37,37 @@ class LLMMessageRole(str, Enum):
     assistant = "assistant"
 
 
-class LLMMessageType(str, Enum):
-    text = "text"
-    image = "image"
-
-
 class LLMMessage(BaseModel):
     role: LLMMessageRole = LLMMessageRole.user
-    type: LLMMessageType = LLMMessageType.text
-    content: str
+    text: str
+    image: Optional[str] = None  # base64 enoded image
 
     def to_openai_message(self):
-        if self.type == LLMMessageType.text:
-            return {"role": self.role, "content": self.content}
+        content = [{"type": "text", "text": self.text}]
+
+        if self.image:
+            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.text}"}})
 
         return {
             "role": self.role,
-            "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{self.content}", "detail": "high"},
+            "content": content,
         }
 
     def to_claude_message(self):
-        if self.type == LLMMessageType.text:
-            return {"role": self.role, "content": self.content}
+        content = [{"type": "text", "text": self.text}]
+
+        if self.image:
+            content.insert(
+                0,
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": self.text},
+                },
+            )
 
         return {
             "role": self.role,
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": self.content,
-            },
+            "content": content,
         }
 
 
@@ -177,18 +177,18 @@ class LLMApiConfigNode:
     CATEGORY = "ArtVenture/LLM"
 
     def make_config(self, max_token, model, temperature):
-        return (LLMConfig(model, max_token, temperature),)
+        return (LLMConfig(model=model, max_token=max_token, temperature=temperature),)
 
 
-class LLMTextMessageNode:
+class LLMMessageNode:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "role": (["system", "user", "assistant"],),
-                "content": ("STRING", {"multiline": True}),
+                "text": ("STRING", {"multiline": True}),
             },
-            "optional": {"messages": ("LLM_MESSAGE",)},
+            "optional": {"image": ("IMAGE",), "messages": ("LLM_MESSAGE",)},
         }
 
     RETURN_TYPES = ("LLM_MESSAGE",)
@@ -196,39 +196,16 @@ class LLMTextMessageNode:
     FUNCTION = "make_message"
     CATEGORY = "ArtVenture/LLM"
 
-    def make_message(self, role, content, messages=None):
+    def make_message(self, role, text, image=None, messages=None):
         if messages is None:
             messages = []
 
-        messages.append(LLMMessage(role=role, content=content))
-
-        return (messages,)
-
-
-class LLMImageMessageNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "role": (["system", "user", "assistant"],),
-                "image": ("IMAGE",),
-            },
-            "optional": {"messages": ("LLM_MESSAGE",)},
-        }
-
-    RETURN_TYPES = ("LLM_MESSAGE",)
-    RETURN_NAMES = ("messages",)
-    FUNCTION = "make_message"
-    CATEGORY = "ArtVenture/LLM"
-
-    def make_message(self, role, image, messages=None):
-        if messages is None:
-            messages = []
-
-        pil = tensor2pil(image)
-        content = pil2base64(pil)
-
-        messages.append(LLMMessage(role=role, content=content))
+        if isinstance(image, Tensor):
+            pil = tensor2pil(image)
+            content = pil2base64(pil)
+            messages.append(LLMMessage(role=role, text=text, image=content))
+        else:
+            messages.append(LLMMessage(role=role, text=text))
 
         return (messages,)
 
@@ -261,8 +238,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_OpenAIApi": OpenAIApiNode,
     "AV_ClaudeApi": ClaudeApiNode,
     "AV_LLMApiConfig": LLMApiConfigNode,
-    "AV_LLMTextMessage": LLMTextMessageNode,
-    "AV_LLMImageMessage": LLMImageMessageNode,
+    "AV_LLMMessage": LLMMessageNode,
     "AV_LLMChat": LLMChatNode,
 }
 
@@ -270,7 +246,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_OpenAIApi": "OpenAI Api",
     "AV_ClaudeApi": "Claude Api",
     "AV_LLMApiConfig": "LLM Api Config",
-    "AV_LLMTextMessage": "LLM Text Message",
-    "AV_LLMImageMessage": "LLM Image Message",
+    "AV_LLMMessage": "LLM Message",
     "AV_LLMChat": "LLM Chat",
 }
