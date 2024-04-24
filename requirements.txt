@@ -7,3 +7,7 @@ qrcode[pil]
 pytorch_lightning
 kornia
 pydantic
+segment_anything
+omegaconf
+openai==1.12.0
+anthropic
