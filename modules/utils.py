@@ -1,14 +1,11 @@
 import os
+import io
 import sys
-import time
 import torch
+import base64
 import numpy as np
-import requests
-import traceback
 import importlib
 import subprocess
-import torch.nn.functional as F
-from typing import Callable
 from PIL import Image
 
 from .logger import logger
@@ -164,3 +161,10 @@ def tensor2pil(image: torch.Tensor, mode=None):
 
 def tensor2bytes(image: torch.Tensor) -> bytes:
     return tensor2pil(image).tobytes()
+
+
+def pil2base64(image: Image.Image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_str
