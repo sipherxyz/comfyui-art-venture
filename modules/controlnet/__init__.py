@@ -20,8 +20,7 @@ def load_controlnet(control_net_name, control_net_override="None", timestep_keyf
     if control_net_name == "None":
         return None
 
-    controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
-    return comfy_load_controlnet(controlnet_path, timestep_keyframe=timestep_keyframe)
+    return comfy_load_controlnet(control_net_name, timestep_keyframe=timestep_keyframe)
 
 
 def apply_preprocessor(image, preprocessor, resolution=512):
