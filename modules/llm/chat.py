@@ -1,5 +1,4 @@
 import os
-import json
 import requests
 from enum import Enum
 from torch import Tensor
@@ -78,7 +77,7 @@ class OpenAIApi(BaseModel):
     endpoint: Optional[str] = "https://api.openai.com/v1"
     timeout: Optional[int] = 60
 
-    def completion(self, messages: List[LLMMessage], config: LLMConfig):
+    def completion(self, messages: List[LLMMessage], config: LLMConfig, seed=None):
         formated_messages = [m.to_openai_message() for m in messages]
 
         url = f"{self.endpoint}/chat/completions"
@@ -87,11 +86,17 @@ class OpenAIApi(BaseModel):
             "model": config.model,
             "max_tokens": config.max_token,
             "temperature": config.temperature,
+            # "seed": seed,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
-        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=self.timeout)
-        content = response.json()["choices"][0]["message"]["content"]
+        response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
+        data: Dict = response.json()
+
+        if data.get("error", None) is not None:
+            raise Exception(data.get("error").get("message"))
+        
+        content = data["choices"][0]["message"]["content"]
 
         return content
 
@@ -102,7 +107,7 @@ class ClaudeApi(BaseModel):
     version: Optional[str] = "2023-06-01"
     timeout: Optional[int] = 60
 
-    def completion(self, messages: List[LLMMessage], config: LLMConfig):
+    def completion(self, messages: List[LLMMessage], config: LLMConfig, seed=None):
         system_message = [m for m in messages if m.role == "system"]
         user_messages = [m for m in messages if m.role != "system"]
         formated_messages = [m.to_claude_message() for m in user_messages]
@@ -117,7 +122,7 @@ class ClaudeApi(BaseModel):
         }
         headers = {"x-api-key": self.api_key, "anthropic-version": self.version}
 
-        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=self.timeout)
+        response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
         data: Dict = response.json()
 
         if data.get("error", None) is not None:
@@ -244,7 +249,8 @@ class LLMChatNode:
                 "messages": ("LLM_MESSAGE",),
                 "api": ("LLM_API",),
                 "config": ("LLM_CONFIG",),
-            }
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0x1FFFFFFFFFFFFF}),
+            },
         }
 
     RETURN_TYPES = ("STRING",)
@@ -252,8 +258,8 @@ class LLMChatNode:
     FUNCTION = "chat"
     CATEGORY = "ArtVenture/LLM"
 
-    def chat(self, messages: List[LLMMessage], api: LLMApi, config: LLMConfig):
-        response = api.completion(messages, config)
+    def chat(self, messages: List[LLMMessage], api: LLMApi, config: LLMConfig, seed):
+        response = api.completion(messages, config, seed)
         return (response,)
 
 
