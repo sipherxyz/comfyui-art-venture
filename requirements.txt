@@ -9,5 +9,3 @@ kornia
 pydantic
 segment_anything
 omegaconf
-openai>=1.23.3
-anthropic

@@ -1,8 +1,10 @@
 import os
+import json
+import requests
 from enum import Enum
 from torch import Tensor
 from pydantic import BaseModel
-from typing import List, Union, Optional
+from typing import List, Dict, Union, Optional
 
 from ..utils import tensor2pil, pil2base64
 
@@ -61,7 +63,7 @@ class LLMMessage(BaseModel):
                 0,
                 {
                     "type": "image",
-                    "source": {"type": "base64", "media_type": "image/png", "data": self.text},
+                    "source": {"type": "base64", "media_type": "image/png", "data": self.image},
                 },
             )
 
@@ -71,44 +73,57 @@ class LLMMessage(BaseModel):
         }
 
 
-class OpenAIApi:
-    def __init__(self, openai_api_key: str, endpoint: str) -> None:
-        from openai import OpenAI
-
-        self._type = "openai"
-        self.client = OpenAI(api_key=openai_api_key, base_url=endpoint)
+class OpenAIApi(BaseModel):
+    api_key: str
+    endpoint: Optional[str] = "https://api.openai.com/v1"
+    timeout: Optional[int] = 60
 
     def completion(self, messages: List[LLMMessage], config: LLMConfig):
         formated_messages = [m.to_openai_message() for m in messages]
 
-        response = self.client.chat.completions.create(
-            messages=formated_messages, model=config.model, max_tokens=config.max_token, temperature=config.temperature
-        )
-        content = response.choices[0].message.content
+        url = f"{self.endpoint}/chat/completions"
+        data = {
+            "messages": formated_messages,
+            "model": config.model,
+            "max_tokens": config.max_token,
+            "temperature": config.temperature,
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+
+        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=self.timeout)
+        content = response.json()["choices"][0]["message"]["content"]
 
         return content
 
 
-class ClaudeApi:
-    def __init__(self, claude_api_key: str, endpoint: str) -> None:
-        from anthropic import Anthropic
-
-        self._type = "claude"
-        self.client = Anthropic(api_key=claude_api_key, base_url=endpoint)
+class ClaudeApi(BaseModel):
+    api_key: str
+    endpoint: Optional[str] = "https://api.anthropic.com/v1"
+    version: Optional[str] = "2023-06-01"
+    timeout: Optional[int] = 60
 
     def completion(self, messages: List[LLMMessage], config: LLMConfig):
         system_message = [m for m in messages if m.role == "system"]
         user_messages = [m for m in messages if m.role != "system"]
         formated_messages = [m.to_claude_message() for m in user_messages]
 
-        response = self.client.messages.create(
-            messages=formated_messages,
-            model=config.model,
-            max_tokens=config.max_token,
-            temperature=config.temperature,
-            system=system_message[0].text if len(system_message) > 0 else None,
-        )
-        content = response.content[0].text
+        url = f"{self.endpoint}/messages"
+        data = {
+            "messages": formated_messages,
+            "model": config.model,
+            "max_tokens": config.max_token,
+            "temperature": config.temperature,
+            "system": system_message[0].text if len(system_message) > 0 else None,
+        }
+        headers = {"x-api-key": self.api_key, "anthropic-version": self.version}
+
+        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=self.timeout)
+        data: Dict = response.json()
+
+        if data.get("error", None) is not None:
+            raise Exception(data.get("error").get("message"))
+
+        content = data["content"][0]["text"]
 
         return content
 
@@ -136,7 +151,7 @@ class OpenAIApiNode:
         if not openai_api_key:
             raise Exception("OpenAI API key is required.")
 
-        return (OpenAIApi(openai_api_key, endpoint),)
+        return (OpenAIApi(api_key=openai_api_key, endpoint=endpoint),)
 
 
 class ClaudeApiNode:
@@ -145,7 +160,8 @@ class ClaudeApiNode:
         return {
             "required": {
                 "claude_api_key": ("STRING", {"multiline": False}),
-                "endpoint": ("STRING", {"multiline": False, "default": "https://api.anthropic.com"}),
+                "endpoint": ("STRING", {"multiline": False, "default": "https://api.anthropic.com/v1"}),
+                "version": (["2023-06-01"], {"default": "2023-06-01"}),
             },
         }
 
@@ -154,13 +170,13 @@ class ClaudeApiNode:
     FUNCTION = "create_api"
     CATEGORY = "ArtVenture/LLM"
 
-    def create_api(self, claude_api_key, endpoint):
+    def create_api(self, claude_api_key, endpoint, version):
         if not claude_api_key or claude_api_key == "":
             claude_api_key = os.environ.get("CLAUDE_API_KEY")
         if not claude_api_key:
             raise Exception("Claude API key is required.")
 
-        return (ClaudeApi(claude_api_key, endpoint),)
+        return (ClaudeApi(api_key=claude_api_key, endpoint=endpoint, version=version),)
 
 
 class LLMApiConfigNode:
@@ -200,8 +216,7 @@ class LLMMessageNode:
     CATEGORY = "ArtVenture/LLM"
 
     def make_message(self, role, text, image: Optional[Tensor] = None, messages: Optional[List[LLMMessage]] = None):
-        if messages is None:
-            messages = []
+        messages = [] if messages is None else messages.copy()
 
         if role == "system":
             if isinstance(image, Tensor):
@@ -238,11 +253,8 @@ class LLMChatNode:
     CATEGORY = "ArtVenture/LLM"
 
     def chat(self, messages: List[LLMMessage], api: LLMApi, config: LLMConfig):
-        try:
-            response = api.completion(messages, config)
-            return (response,)
-        except Exception as e:
-            return (f"Error: {str(e)}",)
+        response = api.completion(messages, config)
+        return (response,)
 
 
 NODE_CLASS_MAPPINGS = {
