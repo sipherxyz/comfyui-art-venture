@@ -1029,6 +1029,24 @@ class UtilSeedSelector:
         return (fixed_seed if not mode else seed,)
 
 
+class UtilCheckpointSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+            }
+        }
+
+    RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING")
+    RETURN_NAMES = ("ckpt_name", "ckpt_name_str")
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "get_ckpt_name"
+
+    def get_ckpt_name(self, ckpt_name):
+        return (ckpt_name, ckpt_name)
+
+
 class UtilModelMerge:
     @classmethod
     def INPUT_TYPES(s):
@@ -1082,6 +1100,7 @@ NODE_CLASS_MAPPINGS = {
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "SeedSelector": UtilSeedSelector,
+    "CheckpointNameSelector": UtilCheckpointSelector,
     "LoadJsonFromUrl": UtilLoadJsonFromUrl,
     "GetObjectFromJson": UtilGetObjectFromJson,
     "GetTextFromJson": UtilGetTextFromJson,
@@ -1114,6 +1133,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "SeedSelector": "Seed Selector",
+    "CheckpointNameSelector": "Checkpoint Name Selector",
     "LoadJsonFromUrl": "Load JSON From URL",
     "GetObjectFromJson": "Get Object From JSON",
     "GetTextFromJson": "Get Text From JSON",
