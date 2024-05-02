@@ -247,10 +247,14 @@ try:
             return (model, images)
 
     NODE_CLASS_MAPPINGS.update(
-        {"AV_IPAdapter": AV_IPAdapter, "AV_IPAdapterPipeline": AV_IPAdapterPipeline, "AV_StyleApply": AV_StyleApply}
+        {"AV_IPAdapter": AV_IPAdapter, "AV_IPAdapterPipe": AV_IPAdapterPipeline, "AV_StyleApply": AV_StyleApply}
     )
     NODE_DISPLAY_NAME_MAPPINGS.update(
-        {"AV_IPAdapter": "IP Adapter Apply", "AV_IPAdapter": "IP Adapter Pipeline", "AV_StyleApply": "AV Style Apply"}
+        {
+            "AV_IPAdapter": "IP Adapter Apply",
+            "AV_IPAdapterPipe": "IP Adapter Pipe",
+            "AV_StyleApply": "AV Style Apply",
+        }
     )
 
 except Exception as e:
