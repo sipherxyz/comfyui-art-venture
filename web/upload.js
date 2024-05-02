@@ -562,7 +562,7 @@ function addImagePreview(nodeType, widgetName) {
         return pathWidget._value;
       },
     });
-    pathWidget.inputEl.addEventListener('change', (e) => {
+    pathWidget.inputEl.addEventListener('keyup', (e) => {
       const value = e.target.value;
       pathWidget._value = value;
       this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
