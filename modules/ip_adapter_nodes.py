@@ -95,7 +95,7 @@ try:
             clip_vision = comfy.clip_vision.load(clip_path)
 
             pipeline = {"ipadapter": {"model": ip_adapter}, "clipvision": {"model": clip_vision}}
-            return pipeline
+            return (pipeline,)
 
     class AV_IPAdapter(IPAdapterModelLoader, IPAdapterApply):
         @classmethod
