@@ -73,7 +73,7 @@ try:
         "FULL FACE - SD1.5 only (portraits stronger)",
     ]
 
-    class AV_IPAdapterPipeline:
+    class AV_IPAdapterPipe:
         @classmethod
         def INPUT_TYPES(cls):
             return {
@@ -88,7 +88,7 @@ try:
         CATEGORY = "Art Venture/IP Adapter"
         FUNCTION = "load_ip_adapter"
 
-        def load_ip_adapter(ip_adapter_name, clip_name):
+        def load_ip_adapter(self, ip_adapter_name, clip_name):
             ip_adapter = loader.load_ipadapter_model(ip_adapter_name)[0]
 
             clip_path = folder_paths.get_full_path("clip_vision", clip_name)
@@ -247,7 +247,7 @@ try:
             return (model, images)
 
     NODE_CLASS_MAPPINGS.update(
-        {"AV_IPAdapter": AV_IPAdapter, "AV_IPAdapterPipe": AV_IPAdapterPipeline, "AV_StyleApply": AV_StyleApply}
+        {"AV_IPAdapter": AV_IPAdapter, "AV_IPAdapterPipe": AV_IPAdapterPipe, "AV_StyleApply": AV_StyleApply}
     )
     NODE_DISPLAY_NAME_MAPPINGS.update(
         {

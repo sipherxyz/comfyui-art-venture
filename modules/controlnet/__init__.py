@@ -111,7 +111,7 @@ class AV_ControlNetPreprocessor:
             "required": {
                 "image": ("IMAGE",),
                 "preprocessor": (["None", "tile"] + s.preprocessors,),
-                "sd_version": (["sd15", "sd15++", "sdxl", "sdxl_t2i", "sdxl_lllite"],),
+                "sd_version": (["sd15", "sdxl", "sdxl_t2i"],),
             },
             "optional": {
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
