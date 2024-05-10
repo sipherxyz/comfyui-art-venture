@@ -1,11 +1,12 @@
 import os
+import json
 import requests
 from enum import Enum
 from torch import Tensor
 from pydantic import BaseModel
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Any
 
-from ..utils import tensor2pil, pil2base64
+from ..utils import ensure_package, tensor2pil, pil2base64
 
 gpt_models = [
     "gpt-3.5-turbo",
@@ -22,6 +23,26 @@ gpt_models = [
 gpt_vision_models = ["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-vision-preview"]
 
 claude_models = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+
+aws_regions = [
+    "us-east-1",
+    "us-west-2",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-northeast-1",
+    "eu-central-1",
+    "eu-west-3",
+    "eu-west-1",
+    "ap-south-3",
+]
+
+bedrock_anthropic_versions = ["bedrock-2023-05-31"]
+
+bedrock_anthropic_models = [
+    "anthropic.claude-3-haiku-20240307-v1:0",
+    "anthropic.claude-3-sonnet-20240229-v1:0",
+    "anthropic.claude-3-opus-20240229-v1:0",
+]
 
 default_system_prompt = "You are a useful AI agent."
 
@@ -95,7 +116,7 @@ class OpenAIApi(BaseModel):
 
         if data.get("error", None) is not None:
             raise Exception(data.get("error").get("message"))
-        
+
         content = data["choices"][0]["message"]["content"]
 
         return content
@@ -124,6 +145,53 @@ class ClaudeApi(BaseModel):
 
         response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
         data: Dict = response.json()
+
+        if data.get("error", None) is not None:
+            raise Exception(data.get("error").get("message"))
+
+        content = data["content"][0]["text"]
+
+        return content
+
+
+class AwsBedrockClaudeApi(BaseModel):
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_session_token: Optional[str] = None
+    region: Optional[str] = aws_regions[0]
+    version: Optional[str] = bedrock_anthropic_versions[0]
+    timeout: Optional[int] = 60
+    bedrock_runtime: Any = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        ensure_package("boto3", version="1.34.101")
+        import boto3
+
+        self.bedrock_runtime = boto3.client(
+            service_name="bedrock-runtime",
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+            aws_session_token=self.aws_session_token,
+            region_name=self.region,
+        )
+
+    def completion(self, messages: List[LLMMessage], config: LLMConfig, seed=None):
+        system_message = [m for m in messages if m.role == "system"]
+        user_messages = [m for m in messages if m.role != "system"]
+        formated_messages = [m.to_claude_message() for m in user_messages]
+
+        data = {
+            "anthropic_version": self.version,
+            "messages": formated_messages,
+            "max_tokens": config.max_token,
+            "temperature": config.temperature,
+            "system": system_message[0].text if len(system_message) > 0 else None,
+        }
+
+        response = self.bedrock_runtime.invoke_model(body=json.dumps(data), modelId=config.model)
+        data: Dict = json.loads(response.get("body").read())
 
         if data.get("error", None) is not None:
             raise Exception(data.get("error").get("message"))
@@ -184,12 +252,52 @@ class ClaudeApiNode:
         return (ClaudeApi(api_key=claude_api_key, endpoint=endpoint, version=version),)
 
 
+class AwsBedrockClaudeApiNode:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "aws_access_key_id": ("STRING", {"multiline": False}),
+                "aws_secret_access_key": ("STRING", {"multiline": False}),
+                "aws_session_token": ("STRING", {"multiline": False}),
+                "region": (aws_regions, {"default": aws_regions[0]}),
+                "version": (bedrock_anthropic_versions, {"default": bedrock_anthropic_versions[0]}),
+            },
+        }
+
+    RETURN_TYPES = ("LLM_API",)
+    RETURN_NAMES = ("llm_api",)
+    FUNCTION = "create_api"
+    CATEGORY = "ArtVenture/LLM"
+
+    def create_api(self, aws_access_key_id, aws_secret_access_key, aws_session_token, region, version):
+        if not aws_access_key_id or aws_access_key_id == "":
+            aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID", None)
+        if not aws_secret_access_key or aws_secret_access_key == "":
+            aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
+        if not aws_session_token or aws_session_token == "":
+            aws_session_token = os.environ.get("AWS_SESSION_TOKEN", None)
+
+        if not aws_access_key_id or not aws_secret_access_key:
+            raise Exception("AWS credentials is required.")
+
+        return (
+            AwsBedrockClaudeApi(
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                aws_session_token=aws_session_token,
+                region=region,
+                version=version,
+            ),
+        )
+
+
 class LLMApiConfigNode:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model": (gpt_models + claude_models, {"default": gpt_vision_models[0]}),
+                "model": (gpt_models + claude_models + bedrock_anthropic_models, {"default": gpt_vision_models[0]}),
                 "max_token": ("INT", {"default": 1024}),
                 "temperature": ("FLOAT", {"default": 0, "min": 0, "max": 1.0, "step": 0.001}),
             }
@@ -266,6 +374,7 @@ class LLMChatNode:
 NODE_CLASS_MAPPINGS = {
     "AV_OpenAIApi": OpenAIApiNode,
     "AV_ClaudeApi": ClaudeApiNode,
+    "AV_AwsBedrockClaudeApi": AwsBedrockClaudeApiNode,
     "AV_LLMApiConfig": LLMApiConfigNode,
     "AV_LLMMessage": LLMMessageNode,
     "AV_LLMChat": LLMChatNode,
@@ -274,6 +383,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_OpenAIApi": "OpenAI Api",
     "AV_ClaudeApi": "Claude Api",
+    "AV_AwsBedrockClaudeApi": "AWS Bedrock Claude API",
     "AV_LLMApiConfig": "LLM Api Config",
     "AV_LLMMessage": "LLM Message",
     "AV_LLMChat": "LLM Chat",

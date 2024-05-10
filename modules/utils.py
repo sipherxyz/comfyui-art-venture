@@ -6,6 +6,8 @@ import base64
 import numpy as np
 import importlib
 import subprocess
+import pkg_resources
+from pkg_resources import parse_version
 from PIL import Image
 
 from .logger import logger
@@ -19,21 +21,37 @@ class AnyType(str):
 any_type = AnyType("*")
 
 
-def ensure_package(package, install_package_name=None):
+def ensure_package(package, version=None, install_package_name=None):
     # Try to import the package
     try:
-        importlib.import_module(package)
+        module = importlib.import_module(package)
     except ImportError:
         logger.info(f"Package {package} is not installed. Installing now...")
-
-        if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
-            pip_install = [sys.executable, "-s", "-m", "pip", "install"]
-        else:
-            pip_install = [sys.executable, "-m", "pip", "install"]
-
-        subprocess.check_call(pip_install + [install_package_name or package])
+        install_command = _construct_pip_command(install_package_name or package, version)
+        subprocess.check_call(install_command)
     else:
-        print(f"Package {package} is already installed.")
+        # If a specific version is required, check the version
+        if version:
+            installed_version = pkg_resources.get_distribution(package).version
+            if parse_version(installed_version) < parse_version(version):
+                logger.info(
+                    f"Package {package} is outdated (installed: {installed_version}, required: {version}). Upgrading now..."
+                )
+                install_command = _construct_pip_command(install_package_name or package, version)
+                subprocess.check_call(install_command)
+
+
+def _construct_pip_command(package_name, version=None):
+    if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
+        pip_install = [sys.executable, "-s", "-m", "pip", "install"]
+    else:
+        pip_install = [sys.executable, "-m", "pip", "install"]
+
+    # Include the version in the package name if specified
+    if version:
+        package_name = f"{package_name}=={version}"
+
+    return pip_install + [package_name]
 
 
 # modified from https://stackoverflow.com/questions/22058048/hashing-a-file-in-python
