@@ -1,7 +1,7 @@
-import { app, ANIM_PREVIEW_WIDGET } from '../../../scripts/app.js';
-import { api } from '../../../scripts/api.js';
-import { $el } from '../../../scripts/ui.js';
-import { createImageHost } from '../../../scripts/ui/imagePreview.js';
+import { app, ANIM_PREVIEW_WIDGET } from '../../scripts/app.js';
+import { api } from '../../scripts/api.js';
+import { $el } from '../../scripts/ui.js';
+import { createImageHost } from '../../scripts/ui/imagePreview.js';
 
 const style = `
 .comfy-img-preview video {
