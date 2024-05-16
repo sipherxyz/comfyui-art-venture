@@ -88,7 +88,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
         elif url == "":
             continue
         else:
-            raise Exception(f"Invalid url: {url}")
+            url = folder_paths.get_annotated_filepath(url)
+            if not os.path.isfile(url):
+                raise Exception(f"Invalid url: {url}")
+
+            i = Image.open(url)
 
         i = ImageOps.exif_transpose(i)
         has_alpha = "A" in i.getbands()
@@ -125,10 +129,9 @@ class UtilLoadImageFromUrl:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
-            },
+            "required": {},
             "optional": {
+                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "keep_alpha_channel": (
                     "BOOLEAN",
                     {"default": False, "label_on": "enabled", "label_off": "disabled"},
@@ -137,6 +140,7 @@ class UtilLoadImageFromUrl:
                     "BOOLEAN",
                     {"default": False, "label_on": "list", "label_off": "batch"},
                 ),
+                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
         }
 
@@ -146,8 +150,11 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
-        urls = url.strip().split("\n")
+    def load_image(self, image="", keep_alpha_channel=False, output_mode=False, url=""):
+        if not image or image == "":
+            image = url
+
+        urls = image.strip().split("\n")
         images, masks = load_images_from_url(urls, keep_alpha_channel)
         if len(images) == 0:
             image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
@@ -196,7 +203,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "channel": (["alpha", "red", "green", "blue"],),
             }
         }
@@ -204,8 +211,11 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("masks",)
 
-    def load_image(self, url: str, channel: str):
-        urls = url.strip().split("\n")
+    def load_image(self, image: str, channel: str, url=""):
+        if not image or image == "":
+            image = url
+
+        urls = image.strip().split("\n")
         images, alphas = load_images_from_url([urls], False)
 
         masks = []
@@ -1034,7 +1044,7 @@ class UtilCheckpointSelector:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
             }
         }
 

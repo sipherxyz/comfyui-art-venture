@@ -1,4 +1,4 @@
-import { app, ANIM_PREVIEW_WIDGET } from '../../../scripts/app.js';
+import { app, ComfyApp, ANIM_PREVIEW_WIDGET } from '../../../scripts/app.js';
 import { api } from '../../../scripts/api.js';
 import { $el } from '../../../scripts/ui.js';
 import { createImageHost } from '../../../scripts/ui/imagePreview.js';
@@ -11,7 +11,7 @@ const style = `
 }
 `;
 
-const URL_REGEX = /^(https?:\/\/|\/view\?|data:image\/)/;
+const URL_REGEX = /^((blob:)?https?:\/\/|\/view\?|data:image\/)/;
 
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl', 'LoadVideoFromUrl'];
 
@@ -119,7 +119,43 @@ function addKVState(nodeType) {
   });
 }
 
-function formatUploadedUrl(params) {
+function migrateWidget(nodeType, oldWidgetName, newWidgetName) {
+  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
+    if (!this.widgets) return
+
+    const oldIndex = this.widgets.findIndex(w => w.name === oldWidgetName)
+    if (oldIndex > -1) {
+      this.widgets.splice(oldIndex, 1)
+    }
+
+    chainCallback(this, 'onConfigure', function (info) {
+      if (typeof info.widgets_values != 'object') return
+
+      const newWidget = this.widgets.find(w => w.name === newWidgetName)
+      if (newWidget && info.widgets_values[oldWidgetName]) {
+        newWidget.value = info.widgets_values[oldWidgetName]
+      }
+    })
+  })
+}
+
+function formatImageUrl(params) {
+  if (typeof params === 'string') {
+    if (URL_REGEX.test(params)) return params;
+
+    const folder_separator = params.lastIndexOf('/');
+    let subfolder = '';
+    if (folder_separator > -1) {
+      subfolder = params.substring(0, folder_separator);
+      params = params.substring(folder_separator + 1);
+    }
+    return api.apiURL(
+      `/view?filename=${encodeURIComponent(
+        params,
+      )}&type=input&subfolder=${subfolder}${app.getPreviewFormatParam()}`,
+    );
+  }
+
   if (params.url) {
     return params.url;
   }
@@ -271,8 +307,7 @@ function addUploadWidget(nodeType, widgetName, type) {
             }
           }
 
-          nodeType.images = successes.map(formatUploadedUrl);
-          pathWidget.value = nodeType.images.join('\n');
+          pathWidget.callback(successes.map(formatImageUrl).join('\n'));
           fileInput.value = '';
         },
       });
@@ -305,7 +340,7 @@ function addUploadWidget(nodeType, widgetName, type) {
             }
           }
 
-          pathWidget.value = successes.map(formatUploadedUrl).join('\n');
+          pathWidget.callback(successes.map(formatImageUrl).join('\n'));
           fileInput.value = '';
         },
       });
@@ -323,7 +358,43 @@ function addUploadWidget(nodeType, widgetName, type) {
   });
 }
 
-function addVideoPreview(nodeType, options = {}) {
+function patchValueSetter(nodeType, widgetName) {
+  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
+    const pathWidget = this.widgets.find(w => w.name === widgetName)
+    pathWidget._value = pathWidget.value
+    let editing = false
+
+    const setter = value => {
+      pathWidget._value = value
+      this.images = (value ?? "").split("\n")
+      if (pathWidget.type === "customtext" && !editing) {
+        pathWidget.inputEl.value = value
+      }
+    }
+
+    Object.defineProperty(pathWidget, "value", {
+      set: setter,
+      get: () => pathWidget._value,
+    })
+
+    if (pathWidget.type === "customtext") {
+      pathWidget.inputEl.addEventListener("focus", (e) => {
+        editing = true
+      })
+      pathWidget.inputEl.addEventListener("blur", (e) => {
+        editing = false
+      })
+      pathWidget.inputEl.addEventListener("keyup", (e) => {
+        setter(e.target.value)
+      })
+    }
+
+    pathWidget.callback = setter
+    pathWidget.value = pathWidget._value
+  });
+}
+
+function addVideoPreview(nodeType, widgetName) {
   const createVideoNode = (url) => {
     return new Promise((cb) => {
       const videoEl = document.createElement('video');
@@ -366,9 +437,7 @@ function addVideoPreview(nodeType, options = {}) {
   nodeType.prototype.onDrawBackground = function (ctx) {
     if (this.flags.collapsed) return;
 
-    let imageURLs = (this.images ?? []).map((i) =>
-      typeof i === 'string' ? i : formatUploadedUrl(i),
-    );
+    let imageURLs = (this.images ?? []).map(formatImageUrl);
     let imagesChanged = false;
 
     if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
@@ -442,69 +511,11 @@ function addVideoPreview(nodeType, options = {}) {
       });
   };
 
-  const { textWidget, comboWidget } = options;
+  patchValueSetter(nodeType, widgetName)
 
-  if (textWidget) {
-    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-      const pathWidget = this.widgets.find((w) => w.name === textWidget);
-      pathWidget._value = pathWidget.value;
-      Object.defineProperty(pathWidget, 'value', {
-        set: (value) => {
-          pathWidget._value = value;
-          pathWidget.inputEl.value = value;
-          this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-        },
-        get: () => {
-          return pathWidget._value;
-        },
-      });
-      pathWidget.inputEl.addEventListener('change', (e) => {
-        const value = e.target.value;
-        pathWidget._value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      });
-
-      // Set value to ensure preview displays on initial add.
-      pathWidget.value = pathWidget._value;
-    });
-  }
-
-  if (comboWidget) {
-    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-      const pathWidget = this.widgets.find((w) => w.name === comboWidget);
-      pathWidget._value = pathWidget.value;
-      Object.defineProperty(pathWidget, 'value', {
-        set: (value) => {
-          pathWidget._value = value;
-          if (!value) {
-            return this.images = []
-          }
-
-          const parts = value.split("/")
-          const filename = parts.pop()
-          const subfolder = parts.join("/")
-          const extension = filename.split(".").pop();
-          const format = (["gif", "webp", "avif"].includes(extension)) ? 'image' : 'video'
-          this.images = [formatUploadedUrl({ filename, subfolder, type: "input", format: format })]
-        },
-        get: () => {
-          return pathWidget._value;
-        },
-      });
-      pathWidget.inputEl.addEventListener('change', (e) => {
-        const value = e.target.value;
-        pathWidget._value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      });
-
-      // Set value to ensure preview displays on initial add.
-      pathWidget.value = pathWidget._value;
-    });
-  }
-
-  chainCallback(nodeType.prototype, "onExecuted", function (message) {
+  chainCallback(nodeType.prototype, 'onExecuted', function (message) {
     if (message?.videos) {
-      this.images = message?.videos.map(formatUploadedUrl);
+      this.images = message?.videos.map(formatImageUrl);
     }
   });
 }
@@ -514,9 +525,7 @@ function addImagePreview(nodeType, widgetName) {
   nodeType.prototype.onDrawBackground = function (ctx) {
     if (this.flags.collapsed) return;
 
-    let imageURLs = (this.images ?? []).map((i) =>
-      typeof i === 'string' ? i : formatUploadedUrl(i),
-    );
+    let imageURLs = (this.images ?? []).map(formatImageUrl);
     let imagesChanged = false;
 
     if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
@@ -549,28 +558,7 @@ function addImagePreview(nodeType, widgetName) {
     onDrawBackground?.call(this, ctx);
   };
 
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === widgetName);
-    pathWidget._value = pathWidget.value;
-    Object.defineProperty(pathWidget, 'value', {
-      set: (value) => {
-        pathWidget._value = value;
-        pathWidget.inputEl.value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      },
-      get: () => {
-        return pathWidget._value;
-      },
-    });
-    pathWidget.inputEl.addEventListener('keyup', (e) => {
-      const value = e.target.value;
-      pathWidget._value = value;
-      this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-    });
-
-    // Set value to ensure preview displays on initial add.
-    pathWidget.value = pathWidget._value;
-  });
+  patchValueSetter(nodeType, widgetName)
 }
 
 app.registerExtension({
@@ -587,15 +575,16 @@ app.registerExtension({
       return;
     }
 
-    addKVState(nodeType);
+    addKVState(nodeType)
 
     if (nodeData.name === 'LoadImageFromUrl' || nodeData.name === 'LoadImageAsMaskFromUrl') {
-      addUploadWidget(nodeType, 'url', 'image');
-      addImagePreview(nodeType, 'url');
+      migrateWidget(nodeType, 'url', 'image')
+      addUploadWidget(nodeType, 'image', 'image');
+      addImagePreview(nodeType, 'image');
     } else if (nodeData.name == 'LoadVideoFromUrl') {
       addVideoCustomSize(nodeType, nodeData, 'force_size');
       addUploadWidget(nodeType, 'video', 'video');
-      addVideoPreview(nodeType, { textWidget: 'video' });
+      addVideoPreview(nodeType, 'video');
     }
   },
 });
