@@ -70,7 +70,7 @@ from .llm import (
 
 from .model_utils import load_file_from_url
 
-lora_cloud_front_url = "https://cdn.artventure.ai"
+lora_cloud_front_url = "https://cdn.protogaia.com"
 
 
 class AVVAELoader(VAELoader):

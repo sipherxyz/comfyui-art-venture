@@ -307,7 +307,7 @@ function addUploadWidget(nodeType, widgetName, type) {
             }
           }
 
-          pathWidget.callback(successes.map(formatImageUrl).join('\n'));
+          pathWidget.value = successes.map(formatImageUrl).join("\n")
           fileInput.value = '';
         },
       });
