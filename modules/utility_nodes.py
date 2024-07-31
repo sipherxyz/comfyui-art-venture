@@ -1053,6 +1053,10 @@ class UtilCheckpointSelector:
     CATEGORY = "Art Venture/Utils"
     FUNCTION = "get_ckpt_name"
 
+    @classmethod
+    def IS_CHANGED(s, *args, **kwargs):
+        return torch.rand(1).item()
+
     def get_ckpt_name(self, ckpt_name):
         return (ckpt_name, ckpt_name)
 
