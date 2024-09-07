@@ -10,9 +10,14 @@ from ..utils import ensure_package, tensor2pil, pil2base64
 
 gpt_models = [
     "gpt-3.5-turbo",
-    "gpt-3.5-turbo-16k",
+    "gpt-3.5-turbo-0125",
+    "gpt-4o",
+    "gpt-4o-2024-05-13",
+    "gpt-4o-2024-08-06",
+    "gpt-4o-mini",
+    "gpt-4o-mini-2024-07-18",
     "gpt-4-turbo",
-    "gpt-4-vision-preview",
+    "gpt-4-turbo-2024-04-09",
     "gpt-4-turbo-preview",
     "gpt-4-0125-preview",
     "gpt-4-1106-preview",
@@ -20,9 +25,9 @@ gpt_models = [
     "gpt-4",
 ]
 
-gpt_vision_models = ["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-vision-preview"]
+gpt_vision_models = ["gpt-4o", "gpt-4o-2024-05-13", "gpt-4o-2024-08-06", "gpt-4o-mini", "gpt-4o-mini-2024-07-18", "gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview"]
 
-claude3_models = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+claude3_models = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-5-sonnet-20240620"]
 claude2_models = ["claude-2.1"]
 
 aws_regions = [
@@ -40,9 +45,10 @@ aws_regions = [
 bedrock_anthropic_versions = ["bedrock-2023-05-31"]
 
 bedrock_claude3_models = [
-    "anthropic.claude-3-haiku-20240307-v1:0",
-    "anthropic.claude-3-sonnet-20240229-v1:0",
-    "anthropic.claude-3-opus-20240229-v1:0",
+    "anthropic.claude-3-haiku-20240307",
+    "anthropic.claude-3-sonnet-20240229",
+    "anthropic.claude-3-opus-20240229",
+    "anthropic.claude-3-5-sonnet-20240620",
 ]
 
 bedrock_claude2_models = [
@@ -73,35 +79,38 @@ class LLMMessageRole(str, Enum):
 
 class LLMMessage(BaseModel):
     role: LLMMessageRole = LLMMessageRole.user
-    text: str
-    image: Optional[str] = None  # base64 enoded image
+    content: List[Dict[str, Any]]
+
+    @classmethod
+    def create(cls, role: LLMMessageRole, text: str, image: Optional[str] = None):
+        content = [{"type": "text", "text": text}]
+        if image:
+            content.insert(0, {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image
+                }
+            })
+        return cls(role=role, content=content)
 
     def to_openai_message(self):
-        content = [{"type": "text", "text": self.text}]
-
-        if self.image:
-            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.text}"}})
-
+        content = self.content
+        if len(content) == 1 and content[0]["type"] == "text":
+            return {
+                "role": self.role,
+                "content": content[0]["text"]
+            }
         return {
             "role": self.role,
-            "content": content,
+            "content": content
         }
 
     def to_claude_message(self):
-        content = [{"type": "text", "text": self.text}]
-
-        if self.image:
-            content.insert(
-                0,
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/png", "data": self.image},
-                },
-            )
-
         return {
             "role": self.role,
-            "content": content,
+            "content": self.content
         }
 
 
@@ -114,15 +123,14 @@ class OpenAIApi(BaseModel):
         if config.model not in gpt_models:
             raise Exception(f"Must provide an OpenAI model, got {config.model}")
 
-        formated_messages = [m.to_openai_message() for m in messages]
+        formatted_messages = [m.to_openai_message() for m in messages]
 
         url = f"{self.endpoint}/chat/completions"
         data = {
-            "messages": formated_messages,
+            "messages": formatted_messages,
             "model": config.model,
             "max_tokens": config.max_token,
             "temperature": config.temperature,
-            # "seed": seed,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
@@ -135,8 +143,7 @@ class OpenAIApi(BaseModel):
         return data["choices"][0]["message"]["content"]
 
     def complete(self, prompt: str, config: LLMConfig, seed=None):
-        messages = [LLMMessage(role=LLMMessageRole.user, text=prompt)]
-
+        messages = [LLMMessage.create(role=LLMMessageRole.user, text=prompt)]
         return self.chat(messages, config, seed)
 
 
@@ -147,22 +154,28 @@ class ClaudeApi(BaseModel):
     timeout: Optional[int] = 60
 
     def chat(self, messages: List[LLMMessage], config: LLMConfig, seed=None):
-        if config.model not in claude3_models:
-            raise Exception(f"Must provide a Claude v3 model, got {config.model}")
+        if config.model not in claude3_models + claude2_models:
+            raise Exception(f"Must provide a Claude model, got {config.model}")
 
-        system_message = [m for m in messages if m.role == "system"]
-        user_messages = [m for m in messages if m.role != "system"]
-        formated_messages = [m.to_claude_message() for m in user_messages]
+        system_message = next((m for m in messages if m.role == LLMMessageRole.system), None)
+        user_messages = [m for m in messages if m.role != LLMMessageRole.system]
+        formatted_messages = [m.to_claude_message() for m in user_messages]
 
         url = f"{self.endpoint}/messages"
         data = {
-            "messages": formated_messages,
+            "messages": formatted_messages,
             "model": config.model,
             "max_tokens": config.max_token,
             "temperature": config.temperature,
-            "system": system_message[0].text if len(system_message) > 0 else None,
         }
-        headers = {"x-api-key": self.api_key, "anthropic-version": self.version}
+        if system_message:
+            data["system"] = system_message.content[0]["text"]
+
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": self.version,
+            "Content-Type": "application/json"
+        }
 
         response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
         data: Dict = response.json()
@@ -173,25 +186,8 @@ class ClaudeApi(BaseModel):
         return data["content"][0]["text"]
 
     def complete(self, prompt: str, config: LLMConfig, seed=None):
-        if config.model not in claude2_models:
-            raise Exception(f"Must provide a Claude v2 model, got {config.model}")
-
-        prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
-        url = f"{self.endpoint}/complete"
-        data = {
-            "prompt": prompt,
-            "max_tokens_to_sample": config.max_token,
-            "temperature": config.temperature,
-        }
-        headers = {"x-api-key": self.api_key, "anthropic-version": self.version}
-
-        response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
-        data: Dict = response.json()
-
-        if data.get("error", None) is not None:
-            raise Exception(data.get("error").get("message"))
-
-        return data["completion"]
+        messages = [LLMMessage.create(role=LLMMessageRole.user, text=prompt)]
+        return self.chat(messages, config, seed)
 
 
 class AwsBedrockMistralApi(BaseModel):
@@ -266,17 +262,18 @@ class AwsBedrockClaudeApi(BaseModel):
         if config.model not in bedrock_claude3_models:
             raise Exception(f"Must provide a Claude v3 model, got {config.model}")
 
-        system_message = [m for m in messages if m.role == "system"]
-        user_messages = [m for m in messages if m.role != "system"]
-        formated_messages = [m.to_claude_message() for m in user_messages]
+        system_message = next((m for m in messages if m.role == LLMMessageRole.system), None)
+        user_messages = [m for m in messages if m.role != LLMMessageRole.system]
+        formatted_messages = [m.to_claude_message() for m in user_messages]
 
         data = {
             "anthropic_version": self.version,
-            "messages": formated_messages,
+            "messages": formatted_messages,
             "max_tokens": config.max_token,
             "temperature": config.temperature,
-            "system": system_message[0].text if len(system_message) > 0 else None,
         }
+        if system_message:
+            data["system"] = system_message.content[0]["text"]
 
         response = self.bedrock_runtime.invoke_model(body=json.dumps(data), modelId=config.model)
         data: Dict = json.loads(response.get("body").read())
@@ -290,9 +287,8 @@ class AwsBedrockClaudeApi(BaseModel):
         if config.model not in bedrock_claude2_models:
             raise Exception(f"Must provide a Claude v2 model, got {config.model}")
 
-        prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
         data = {
-            "prompt": prompt,
+            "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
             "max_tokens_to_sample": config.max_token,
             "temperature": config.temperature,
         }
@@ -306,7 +302,7 @@ class AwsBedrockClaudeApi(BaseModel):
         return data["completion"]
 
 
-LLMApi = Union[OpenAIApi, ClaudeApi]
+LLMApi = Union[OpenAIApi, ClaudeApi, AwsBedrockMistralApi, AwsBedrockClaudeApi]
 
 
 class OpenAIApiNode:
@@ -486,16 +482,16 @@ class LLMMessageNode:
             if isinstance(image, Tensor):
                 raise Exception("System prompt does not support image.")
 
-            system_message = [m for m in messages if m.role == "system"]
+            system_message = [m for m in messages if m.role == LLMMessageRole.system]
             if len(system_message) > 0:
                 raise Exception("Only one system prompt is allowed.")
 
         if isinstance(image, Tensor):
             pil = tensor2pil(image)
             content = pil2base64(pil)
-            messages.append(LLMMessage(role=role, text=text, image=content))
+            messages.append(LLMMessage.create(role=LLMMessageRole(role), text=text, image=content))
         else:
-            messages.append(LLMMessage(role=role, text=text))
+            messages.append(LLMMessage.create(role=LLMMessageRole(role), text=text))
 
         return (messages,)
 
