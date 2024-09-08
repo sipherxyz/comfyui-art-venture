@@ -84,7 +84,7 @@ try:
             }
 
         RETURN_TYPES = ("IPADAPTER",)
-        RETURN_NAMES = "pipeline"
+        RETURN_NAMES = ("pipeline",)
         CATEGORY = "Art Venture/IP Adapter"
         FUNCTION = "load_ip_adapter"
 
