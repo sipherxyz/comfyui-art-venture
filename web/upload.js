@@ -11,7 +11,7 @@ const style = `
 }
 `;
 
-const URL_REGEX = /^((blob:)?https?:\/\/|\/view\?|data:image\/)/;
+const URL_REGEX = /^((blob:)?https?:\/\/|\/view\?|\/api\/view\?|data:image\/)/
 
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl', 'LoadVideoFromUrl'];
 
