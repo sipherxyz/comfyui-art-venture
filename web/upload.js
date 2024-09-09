@@ -407,7 +407,7 @@ function patchValueSetter(nodeType, widgetName) {
       if (typeof value !== 'string') value = formatImageUrl(value);
 
       pathWidget._value = value;
-      this.images = (value ?? '').split('\n');
+      this.images = (value ?? '').split('\n').filter(Boolean);
       if (pathWidget.type === 'customtext' && !editing) {
         pathWidget.inputEl.value = value;
       }
