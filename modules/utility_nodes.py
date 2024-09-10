@@ -241,7 +241,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
             mask = np.array(mask).astype(np.float32) / 255.0
             mask = 1.0 - torch.from_numpy(mask)
 
-            masks.append(mask)
+            masks.append(mask.unsqueeze(0))
 
         if output_mode:
             return (masks,)
