@@ -160,10 +160,11 @@ try:
                 download_url_to_file(url, tempfile, progress=True)
 
                 video = "video/" + filename + " [temp]"
-            elif url.startswith("/view?"):
+            elif url.startswith(("/view?", "/api/view?")):
                 from urllib.parse import parse_qs
 
-                qs = parse_qs(url[6:])
+                qs_idx = url.find("?")
+                qs = parse_qs(url[qs_idx + 1:])
                 filename = qs.get("name", qs.get("filename", None))
                 if filename is None:
                     raise Exception(f"Invalid url: {url}")

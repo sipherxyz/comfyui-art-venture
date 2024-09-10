@@ -411,6 +411,7 @@ function patchValueSetter(nodeType, widgetName) {
       if (pathWidget.type === 'customtext' && !editing) {
         pathWidget.inputEl.value = value;
       }
+      delete app.nodeOutputs[this.id]
     };
 
     Object.defineProperty(pathWidget, 'value', {
@@ -494,7 +495,7 @@ function addVideoPreview(nodeType, widgetName) {
     }
 
     const promises = imageURLs.map((url) => {
-      if (url.startsWith('/view')) {
+      if (/^(\/api)?\/view/.test(url)) {
         url = window.location.origin + url;
       }
 

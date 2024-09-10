@@ -61,10 +61,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
                 raise Exception(response.text)
 
             i = Image.open(io.BytesIO(response.content))
-        elif url.startswith("/view?"):
+        elif url.startswith(("/view?", "/api/view?")):
             from urllib.parse import parse_qs
 
-            qs = parse_qs(url[6:])
+            qs_idx = url.find("?")
+            qs = parse_qs(url[qs_idx + 1:])
             filename = qs.get("name", qs.get("filename", None))
             if filename is None:
                 raise Exception(f"Invalid url: {url}")
@@ -216,7 +217,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
             image = url
 
         urls = image.strip().split("\n")
-        images, alphas = load_images_from_url([urls], False)
+        images, alphas = load_images_from_url(urls, True)
 
         masks = []
 
