@@ -65,7 +65,7 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
             from urllib.parse import parse_qs
 
             qs_idx = url.find("?")
-            qs = parse_qs(url[qs_idx + 1:])
+            qs = parse_qs(url[qs_idx + 1 :])
             filename = qs.get("name", qs.get("filename", None))
             if filename is None:
                 raise Exception(f"Invalid url: {url}")
@@ -206,13 +206,20 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
             "required": {
                 "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "channel": (["alpha", "red", "green", "blue"],),
-            }
+            },
+            "optional": {
+                "output_mode": (
+                    "BOOLEAN",
+                    {"default": False, "label_on": "list", "label_off": "batch"},
+                ),
+            },
         }
 
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("masks",)
+    OUTPUT_IS_LIST = (True,)
 
-    def load_image(self, image: str, channel: str, url=""):
+    def load_image(self, image: str, channel: str, output_mode=False, url=""):
         if not image or image == "":
             image = url
 
@@ -236,7 +243,16 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
 
             masks.append(mask)
 
-        return (torch.stack(masks, dim=0),)
+        if output_mode:
+            return (masks,)
+
+        if len(masks) > 1:
+            for mask in masks[1:]:
+                if mask.shape[0] != masks[0].shape[0] or mask.shape[1] != masks[0].shape[1]:
+                    raise Exception("To output as batch, masks must have the same size. Use list output mode instead.")
+
+
+        return ([torch.cat(masks)],)
 
 
 class UtilLoadJsonFromUrl:
