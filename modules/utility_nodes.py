@@ -160,7 +160,8 @@ class UtilLoadImageFromUrl:
         if len(images) == 0:
             image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
             mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
-            return ([image], [mask], False)
+            images = [tensor2pil(image)]
+            masks = [tensor2pil(mask, mode="L")]
 
         previews = []
         np_images = []
@@ -251,8 +252,27 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
                 if mask.shape[0] != masks[0].shape[0] or mask.shape[1] != masks[0].shape[1]:
                     raise Exception("To output as batch, masks must have the same size. Use list output mode instead.")
 
-
         return ([torch.cat(masks)],)
+
+
+class UtilLoadJsonFromText:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "data": (
+                    "STRING",
+                    {"multiline": True, "dynamicPrompts": False, "placeholder": "JSON object. Eg: {'key': 'value'}"},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("JSON",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "load_json"
+
+    def load_json(self, data: str):
+        return (json.loads(data),)
 
 
 class UtilLoadJsonFromUrl:
@@ -1133,6 +1153,7 @@ NODE_CLASS_MAPPINGS = {
     "SeedSelector": UtilSeedSelector,
     "CheckpointNameSelector": UtilCheckpointSelector,
     "LoadJsonFromUrl": UtilLoadJsonFromUrl,
+    "LoadJsonFromText": UtilLoadJsonFromText,
     "GetObjectFromJson": UtilGetObjectFromJson,
     "GetTextFromJson": UtilGetTextFromJson,
     "GetFloatFromJson": UtilGetFloatFromJson,
@@ -1166,6 +1187,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SeedSelector": "Seed Selector",
     "CheckpointNameSelector": "Checkpoint Name Selector",
     "LoadJsonFromUrl": "Load JSON From URL",
+    "LoadJsonFromText": "Load JSON From Text",
     "GetObjectFromJson": "Get Object From JSON",
     "GetTextFromJson": "Get Text From JSON",
     "GetFloatFromJson": "Get Float From JSON",
