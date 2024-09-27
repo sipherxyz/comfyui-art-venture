@@ -1014,7 +1014,7 @@ class UtillQRCodeGenerator:
     CATEGORY = "Art Venture/Utils"
 
     def create_qr_code(self, text, size, qr_version, error_correction, box_size, border):
-        ensure_package("qrcode", "qrcode[pil]")
+        ensure_package("qrcode", None, "qrcode[pil]")
         import qrcode
 
         if error_correction == "L":
