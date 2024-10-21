@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-art-venture"
-description = "Nodes: ImagesConcat, LoadImageFromUrl, AV_UploadImage"
+description = "A comprehensive set of custom nodes for ComfyUI, focusing on utilities for image processing, JSON manipulation, model operations and working with object via URLs"
 version = "1.0.0"
 license = "LICENSE"
 dependencies = ["timm==0.6.13", "transformers", "fairscale", "pycocoevalcap", "opencv-python", "qrcode[pil]", "pytorch_lightning", "kornia", "pydantic", "segment_anything", "omegaconf", "boto3>=1.34.101"]
@@ -12,4 +12,4 @@ Repository = "https://github.com/sipherxyz/comfyui-art-venture"
 [tool.comfy]
 PublisherId = "protogaia"
 DisplayName = "ArtVenture"
-Icon = ""
+Icon = "https://cdn.protogaia.com/resources/public/text-logo.png"
