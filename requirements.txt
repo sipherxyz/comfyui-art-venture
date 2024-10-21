@@ -1,4 +1,4 @@
-timm==0.6.13
+timm
 transformers
 fairscale
 pycocoevalcap
@@ -9,3 +9,4 @@ kornia
 pydantic
 segment_anything
 omegaconf
+boto3>=1.34.101

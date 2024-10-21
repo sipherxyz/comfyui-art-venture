@@ -2,13 +2,12 @@ import os
 import torch
 import numpy as np
 from PIL import Image
-from segment_anything import SamPredictor, sam_model_registry
 
 import folder_paths
 import comfy.model_management as model_management
 import comfy.utils
 
-from ...utils import tensor2pil, pil2tensor
+from ...utils import ensure_package, tensor2pil, pil2tensor
 
 folder_paths.folder_names_and_paths["sams"] = (
     [
@@ -48,6 +47,9 @@ class SAMLoader:
         else:
             model_kind = "vit_b"
 
+        ensure_package("segment_anything")
+        from segment_anything import sam_model_registry
+
         sam = sam_model_registry[model_kind]()
         sam.load_state_dict(state_dict)
 
@@ -72,6 +74,9 @@ class GetSAMEmbedding:
     def get_sam_embedding(self, image, sam_model, device_mode="AUTO"):
         device = gpu if device_mode != "CPU" else cpu
         sam_model.to(device)
+
+        ensure_package("segment_anything")
+        from segment_anything import SamPredictor
 
         try:
             predictor = SamPredictor(sam_model)

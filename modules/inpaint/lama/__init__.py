@@ -3,13 +3,12 @@ import os
 import yaml
 import torch
 import torch.nn.functional as F
-from omegaconf import OmegaConf
 
 import folder_paths
 import comfy.model_management as model_management
 
 from ...model_utils import download_model
-from ...utils import tensor2pil
+from ...utils import ensure_package
 
 
 lama = None
@@ -36,6 +35,9 @@ def pad_tensor_to_modulo(img, mod):
 def load_model():
     global lama
     if lama is None:
+        ensure_package("omegaconf")
+
+        from omegaconf import OmegaConf
         from .saicinpainting.training.trainers import load_checkpoint
 
         files = download_model(

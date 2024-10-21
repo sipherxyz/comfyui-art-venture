@@ -61,10 +61,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
                 raise Exception(response.text)
 
             i = Image.open(io.BytesIO(response.content))
-        elif url.startswith("/view?"):
+        elif url.startswith(("/view?", "/api/view?")):
             from urllib.parse import parse_qs
 
-            qs = parse_qs(url[6:])
+            qs_idx = url.find("?")
+            qs = parse_qs(url[qs_idx + 1 :])
             filename = qs.get("name", qs.get("filename", None))
             if filename is None:
                 raise Exception(f"Invalid url: {url}")
@@ -88,7 +89,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
         elif url == "":
             continue
         else:
-            raise Exception(f"Invalid url: {url}")
+            url = folder_paths.get_annotated_filepath(url)
+            if not os.path.isfile(url):
+                raise Exception(f"Invalid url: {url}")
+
+            i = Image.open(url)
 
         i = ImageOps.exif_transpose(i)
         has_alpha = "A" in i.getbands()
@@ -125,10 +130,9 @@ class UtilLoadImageFromUrl:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
-            },
+            "required": {},
             "optional": {
+                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "keep_alpha_channel": (
                     "BOOLEAN",
                     {"default": False, "label_on": "enabled", "label_off": "disabled"},
@@ -137,6 +141,7 @@ class UtilLoadImageFromUrl:
                     "BOOLEAN",
                     {"default": False, "label_on": "list", "label_off": "batch"},
                 ),
+                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
         }
 
@@ -146,13 +151,17 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
-        urls = url.strip().split("\n")
+    def load_image(self, image="", keep_alpha_channel=False, output_mode=False, url=""):
+        if not image or image == "":
+            image = url
+
+        urls = image.strip().split("\n")
         images, masks = load_images_from_url(urls, keep_alpha_channel)
         if len(images) == 0:
             image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
             mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
-            return ([image], [mask], False)
+            images = [tensor2pil(image)]
+            masks = [tensor2pil(mask, mode="L")]
 
         previews = []
         np_images = []
@@ -196,17 +205,27 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "channel": (["alpha", "red", "green", "blue"],),
-            }
+            },
+            "optional": {
+                "output_mode": (
+                    "BOOLEAN",
+                    {"default": False, "label_on": "list", "label_off": "batch"},
+                ),
+            },
         }
 
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("masks",)
+    OUTPUT_IS_LIST = (True,)
 
-    def load_image(self, url: str, channel: str):
-        urls = url.strip().split("\n")
-        images, alphas = load_images_from_url([urls], False)
+    def load_image(self, image: str, channel: str, output_mode=False, url=""):
+        if not image or image == "":
+            image = url
+
+        urls = image.strip().split("\n")
+        images, alphas = load_images_from_url(urls, True)
 
         masks = []
 
@@ -223,9 +242,37 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
             mask = np.array(mask).astype(np.float32) / 255.0
             mask = 1.0 - torch.from_numpy(mask)
 
-            masks.append(mask)
+            masks.append(mask.unsqueeze(0))
 
-        return (torch.stack(masks, dim=0),)
+        if output_mode:
+            return (masks,)
+
+        if len(masks) > 1:
+            for mask in masks[1:]:
+                if mask.shape[0] != masks[0].shape[0] or mask.shape[1] != masks[0].shape[1]:
+                    raise Exception("To output as batch, masks must have the same size. Use list output mode instead.")
+
+        return ([torch.cat(masks)],)
+
+
+class UtilLoadJsonFromText:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "data": (
+                    "STRING",
+                    {"multiline": True, "dynamicPrompts": False, "placeholder": "JSON object. Eg: {'key': 'value'}"},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("JSON",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "load_json"
+
+    def load_json(self, data: str):
+        return (json.loads(data),)
 
 
 class UtilLoadJsonFromUrl:
@@ -1029,6 +1076,28 @@ class UtilSeedSelector:
         return (fixed_seed if not mode else seed,)
 
 
+class UtilCheckpointSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+            }
+        }
+
+    RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING")
+    RETURN_NAMES = ("ckpt_name", "ckpt_name_str")
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "get_ckpt_name"
+
+    @classmethod
+    def IS_CHANGED(s, *args, **kwargs):
+        return torch.rand(1).item()
+
+    def get_ckpt_name(self, ckpt_name):
+        return (ckpt_name, ckpt_name)
+
+
 class UtilModelMerge:
     @classmethod
     def INPUT_TYPES(s):
@@ -1082,7 +1151,9 @@ NODE_CLASS_MAPPINGS = {
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "SeedSelector": UtilSeedSelector,
+    "CheckpointNameSelector": UtilCheckpointSelector,
     "LoadJsonFromUrl": UtilLoadJsonFromUrl,
+    "LoadJsonFromText": UtilLoadJsonFromText,
     "GetObjectFromJson": UtilGetObjectFromJson,
     "GetTextFromJson": UtilGetTextFromJson,
     "GetFloatFromJson": UtilGetFloatFromJson,
@@ -1114,7 +1185,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "SeedSelector": "Seed Selector",
+    "CheckpointNameSelector": "Checkpoint Name Selector",
     "LoadJsonFromUrl": "Load JSON From URL",
+    "LoadJsonFromText": "Load JSON From Text",
     "GetObjectFromJson": "Get Object From JSON",
     "GetTextFromJson": "Get Text From JSON",
     "GetFloatFromJson": "Get Float From JSON",

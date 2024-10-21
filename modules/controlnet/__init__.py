@@ -20,8 +20,7 @@ def load_controlnet(control_net_name, control_net_override="None", timestep_keyf
     if control_net_name == "None":
         return None
 
-    controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
-    return comfy_load_controlnet(controlnet_path, timestep_keyframe=timestep_keyframe)
+    return comfy_load_controlnet(control_net_name, timestep_keyframe=timestep_keyframe)
 
 
 def apply_preprocessor(image, preprocessor, resolution=512):
@@ -55,7 +54,8 @@ def detect_controlnet(preprocessor: str, sd_version: str):
     controlnets = folder_paths.get_filename_list("controlnet")
     controlnets = filter(lambda x: sd_version in x, controlnets)
     if sd_version == "sdxl":
-        controlnets = filter(lambda x: "sdxl_t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "lllite" not in x, controlnets)
 
     control_net_name = "None"
     if preprocessor in {"canny", "scribble", "mlsd"}:

@@ -98,7 +98,7 @@ class DeepDanbooruCaption:
         enabled=True,
     ):
         if not enabled:
-            return (join_caption("", prefix, suffix),)
+            return ([join_caption("", prefix, suffix)],)
 
         model = load_danbooru(device_mode)
 
