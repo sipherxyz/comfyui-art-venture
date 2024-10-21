@@ -1130,6 +1130,32 @@ class UtilModelMerge:
         return (m,)
 
 
+class UtilTextRandomMultiline:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": False}),
+                "amount": ("INT", {"default": 1, "min": 1, "max": 1024}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("lines",)
+    OUTPUT_IS_LIST = (True,)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "random_multiline"
+
+    def random_multiline(self, text: str, amount=1, seed=0):
+        lines = text.strip().split("\n")
+        lines = [line.strip() for line in lines if line.strip()]
+
+        custom_random = random.Random(seed)
+        custom_random.shuffle(lines)
+        return (lines[:amount],)
+
+
 NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "LoadImageAsMaskFromUrl": UtilLoadImageAsMaskFromUrl,
@@ -1163,6 +1189,7 @@ NODE_CLASS_MAPPINGS = {
     "RandomFloat": UtilRandomFloat,
     "NumberScaler": UtilNumberScaler,
     "MergeModels": UtilModelMerge,
+    "TextRandomMultiline": UtilTextRandomMultiline,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -1197,4 +1224,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RandomFloat": "Random Float",
     "NumberScaler": "Number Scaler",
     "MergeModels": "Merge Models",
+    "TextRandomMultiline": "Text Random Multiline",
 }
