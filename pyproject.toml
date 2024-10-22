@@ -11,5 +11,5 @@ Repository = "https://github.com/sipherxyz/comfyui-art-venture"
 
 [tool.comfy]
 PublisherId = "protogaia"
-DisplayName = "ArtVenture"
-Icon = "https://cdn.protogaia.com/resources/public/text-logo.png"
+DisplayName = "ComfyUI ArtVenture"
+Icon = "https://cdn.protogaia.com/assets/gaia.png"
