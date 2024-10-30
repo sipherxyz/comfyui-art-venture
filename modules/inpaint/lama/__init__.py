@@ -13,8 +13,8 @@ lama = None
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
 model_dir = os.path.join(folder_paths.models_dir, "lama")
-model_url = "https://d111kwgh87c0gj.cloudfront.net/stable-diffusion/lama/big-lama.pt"
-config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "config.yaml")
+model_url = "https://github.com/Sanster/models/releases/download/add_big_lama/big-lama.pt"
+model_sha = "344c77bbcb158f17dd143070d1e789f38a66c04202311ae3a258ef66667a9ea9"
 
 
 def ceil_modulo(x, mod):
@@ -86,7 +86,6 @@ class LaMaInpaint:
                 msk = (msk > 0) * 1.0
                 msk = msk.unsqueeze(0).unsqueeze(0)
 
-                
                 src_image = pad_tensor_to_modulo(img, 8).to(device)
                 src_mask = pad_tensor_to_modulo(msk, 8).to(device)
 
