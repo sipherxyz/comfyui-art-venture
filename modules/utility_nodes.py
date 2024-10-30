@@ -43,8 +43,8 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
 
 
 def load_images_from_url(urls: List[str], keep_alpha_channel=False):
-    images = []
-    masks = []
+    images: List[Image.Image] = []
+    masks: List[Image.Image] = []
 
     for url in urls:
         if url.startswith("data:image/"):
@@ -227,20 +227,25 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
         urls = image.strip().split("\n")
         images, alphas = load_images_from_url(urls, True)
 
-        masks = []
+        masks: List[torch.Tensor] = []
 
-        for image, alpha in zip(images, alphas):
+        for img, alpha in zip(images, alphas):
             if channel == "alpha":
                 mask = alpha
             elif channel == "red":
-                mask = image.getchannel("R")
+                mask = img.getchannel("R")
             elif channel == "green":
-                mask = image.getchannel("G")
+                mask = img.getchannel("G")
             elif channel == "blue":
-                mask = image.getchannel("B")
+                mask = img.getchannel("B")
 
-            mask = np.array(mask).astype(np.float32) / 255.0
-            mask = 1.0 - torch.from_numpy(mask)
+            if mask:
+                mask = np.array(mask, dtype=np.float32) / 255.0
+                mask = torch.from_numpy(mask)
+                if channel == "alpha":
+                    mask = 1. - mask
+            else:
+                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
             masks.append(mask.unsqueeze(0))
 
