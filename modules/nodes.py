@@ -62,8 +62,6 @@ from .llm import (
     NODE_DISPLAY_NAME_MAPPINGS as LLM_NODE_DISPLAY_NAME_MAPPINGS,
 )
 
-from .model_utils import load_file_from_url
-
 
 class AVVAELoader(VAELoader):
     @classmethod

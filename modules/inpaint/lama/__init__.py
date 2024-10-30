@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import folder_paths
 import comfy.model_management as model_management
 
-from ...model_utils import download_model
+from ...model_utils import download_file
 
 
 lama = None
@@ -33,14 +33,10 @@ def pad_tensor_to_modulo(img, mod):
 def load_model():
     global lama
     if lama is None:
-        files = download_model(
-            model_path=model_dir,
-            model_url=model_url,
-            ext_filter=[".pt"],
-            download_name="big-lama.pt",
-        )
+        model_path = os.path.join(model_dir, "big-lama.pt")
+        download_file(model_url, model_path, model_sha)
 
-        lama = torch.jit.load(files[0], map_location="cpu")
+        lama = torch.jit.load(model_path, map_location="cpu")
         lama.eval()
 
     return lama
