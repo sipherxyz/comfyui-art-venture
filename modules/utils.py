@@ -76,7 +76,19 @@ def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
     value = dict_inst
 
     for key in nested_keys:
-        value = value.get(key, None)
+        # Handle array indexing
+        if key.startswith("[") and key.endswith("]"):
+            try:
+                index = int(key[1:-1])
+                if not isinstance(value, (list, tuple)) or index >= len(value):
+                    return default
+                value = value[index]
+            except (ValueError, TypeError):
+                return default
+        else:
+            if not isinstance(value, dict):
+                return default
+            value = value.get(key, None)
 
         if value is None:
             return default

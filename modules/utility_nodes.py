@@ -43,8 +43,8 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
 
 
 def load_images_from_url(urls: List[str], keep_alpha_channel=False):
-    images = []
-    masks = []
+    images: List[Image.Image] = []
+    masks: List[Image.Image] = []
 
     for url in urls:
         if url.startswith("data:image/"):
@@ -105,14 +105,8 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
         if has_alpha:
             mask = i.getchannel("A")
 
-            # recreate image to fix weird RGB image
-            alpha = i.split()[-1]
-            image = Image.new("RGB", i.size, (0, 0, 0))
-            image.paste(i, mask=alpha)
-            image.putalpha(alpha)
-
-            if not keep_alpha_channel:
-                image = image.convert("RGB")
+        if not keep_alpha_channel:
+            image = i.convert("RGB")
         else:
             image = i
 
@@ -168,17 +162,22 @@ class UtilLoadImageFromUrl:
         np_masks = []
 
         for image, mask in zip(images, masks):
-            # save image to temp folder
-            preview = prepare_image_for_preview(image, self.output_dir, self.filename_prefix)
-            image = pil2tensor(image)
+            if mask is not None:
+                preview_image = Image.new("RGB", image.size)
+                preview_image.paste(image, (0, 0))
+                preview_image.putalpha(mask)
+            else:
+                preview_image = image
 
+            previews.append(prepare_image_for_preview(preview_image, self.output_dir, self.filename_prefix))
+
+            image = pil2tensor(image)
             if mask:
                 mask = np.array(mask).astype(np.float32) / 255.0
                 mask = 1.0 - torch.from_numpy(mask)
             else:
                 mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
-            previews.append(preview)
             np_images.append(image)
             np_masks.append(mask.unsqueeze(0))
 
@@ -227,20 +226,25 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
         urls = image.strip().split("\n")
         images, alphas = load_images_from_url(urls, True)
 
-        masks = []
+        masks: List[torch.Tensor] = []
 
-        for image, alpha in zip(images, alphas):
+        for img, alpha in zip(images, alphas):
             if channel == "alpha":
                 mask = alpha
             elif channel == "red":
-                mask = image.getchannel("R")
+                mask = img.getchannel("R")
             elif channel == "green":
-                mask = image.getchannel("G")
+                mask = img.getchannel("G")
             elif channel == "blue":
-                mask = image.getchannel("B")
+                mask = img.getchannel("B")
 
-            mask = np.array(mask).astype(np.float32) / 255.0
-            mask = 1.0 - torch.from_numpy(mask)
+            if mask:
+                mask = np.array(mask, dtype=np.float32) / 255.0
+                mask = torch.from_numpy(mask)
+                if channel == "alpha":
+                    mask = 1. - mask
+            else:
+                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
             masks.append(mask.unsqueeze(0))
 
@@ -338,7 +342,7 @@ class UtilGetTextFromJson:
     OUTPUT_NODE = True
 
     def get_string_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, ""),)
+        return (str(get_dict_attribute(json, key, "")),)
 
 
 class UtilGetFloatFromJson:
@@ -357,7 +361,7 @@ class UtilGetFloatFromJson:
     OUTPUT_NODE = True
 
     def get_float_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, 0.0),)
+        return (float(get_dict_attribute(json, key, 0.0)),)
 
 
 class UtilGetIntFromJson:
@@ -376,7 +380,7 @@ class UtilGetIntFromJson:
     OUTPUT_NODE = True
 
     def get_int_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, 0),)
+        return (int(get_dict_attribute(json, key, 0)),)
 
 
 class UtilGetBoolFromJson:
