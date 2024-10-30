@@ -12,17 +12,30 @@ import folder_paths
 import comfy.model_management as model_management
 import comfy.utils
 
-from ..model_utils import download_model
-from ..utils import pil2tensor, tensor2pil, numpy2pil
+from ..model_utils import download_file
+from ..utils import pil2tensor, tensor2pil
 from ..logger import logger
 
 
 isnets = {}
+cache_size = [1024, 1024]
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
 model_dir = os.path.join(folder_paths.models_dir, "isnet")
-model_url = "https://huggingface.co/NimaBoscarino/IS-Net_DIS-general-use/resolve/main/isnet-general-use.pth"
-cache_size = [1024, 1024]
+models = {
+    "isnet-general-use.pth": {
+        "url": "https://huggingface.co/NimaBoscarino/IS-Net_DIS-general-use/resolve/main/isnet-general-use.pth",
+        "sha": "9e1aafea58f0b55d0c35077e0ceade6ba1ba2bce372fd4f8f77215391f3fac13",
+    },
+    "isnetis.pth": {
+        "url": "https://github.com/Sanster/models/releases/download/isnetis/isnetis.pth",
+        "sha": "90a970badbd99ca7839b4e0beb09a36565d24edba7e4a876de23c761981e79e0",
+    },
+    "RMBG-1.4.bin": {
+        "url": "https://huggingface.co/briaai/RMBG-1.4/resolve/main/pytorch_model.bin",
+        "sha": "59569acdb281ac9fc9f78f9d33b6f9f17f68e25086b74f9025c35bb5f2848967",
+    },
+}
 
 folder_paths.folder_names_and_paths["isnet"] = (
     [model_dir],
@@ -134,7 +147,6 @@ class ISNetLoader:
         return {
             "required": {
                 "model_name": (folder_paths.get_filename_list("isnet"),),
-                "model_override": ("STRING", {"default": "None"}),
             },
         }
 
@@ -142,15 +154,33 @@ class ISNetLoader:
     FUNCTION = "load_isnet"
     CATEGORY = "Art Venture/Segmentation"
 
-    def load_isnet(self, model_name, model_override="None"):
-        if model_override != "None":
-            if model_override not in folder_paths.get_filename_list("isnet"):
-                logger.warning(f"Model override {model_override} not found. Use {model_name} instead.")
-            else:
-                model_name = model_override
+    def load_isnet(self, model_name):
+        return (load_isnet_model(model_name),)
 
-        model = load_isnet_model(model_name)
-        return (model,)
+
+class DownloadISNetModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (list(models.keys()),),
+            },
+        }
+
+    RETURN_TYPES = ("ISNET_MODEL",)
+    FUNCTION = "download_isnet"
+    CATEGORY = "Art Venture/Segmentation"
+
+    def download_isnet(self, model_name):
+        if model_name not in folder_paths.get_filename_list("isnet"):
+            model_info = models[model_name]
+            download_file(
+                model_info["url"],
+                os.path.join(model_dir, model_name),
+                model_info["sha"],
+            )
+
+        return (load_isnet_model(model_name),)
 
 
 class ISNetSegment:
@@ -179,15 +209,8 @@ class ISNetSegment:
             return (images, masks)
 
         if isnet_model is None:
-            ckpts = folder_paths.get_filename_list("isnet")
-            if len(ckpts) == 0:
-                ckpts = download_model(
-                    model_path=model_dir,
-                    model_url=model_url,
-                    ext_filter=[".pth"],
-                    download_name="isnet-general-use.pth",
-                )
-            isnet_model = load_isnet_model(ckpts[0])
+            downloader = DownloadISNetModel()
+            isnet_model = downloader.download_isnet("isnet-general-use.pth")[0]
 
         device = gpu if device_mode != "CPU" else cpu
         isnet_model = isnet_model.to(device)
@@ -198,7 +221,7 @@ class ISNetSegment:
             for image in images:
                 mask = predict(isnet_model, image, device)
                 mask_im = tensor2pil(mask.permute(1, 2, 0))
-                cropped = Image.new("RGBA", mask_im.size, (0,0,0,0))
+                cropped = Image.new("RGBA", mask_im.size, (0, 0, 0, 0))
                 cropped.paste(tensor2pil(image), mask=mask_im)
 
                 masks.append(mask)

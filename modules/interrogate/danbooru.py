@@ -7,7 +7,7 @@ import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
 from ..image_utils import resize_image
-from ..model_utils import download_model
+from ..model_utils import download_file
 from ..utils import is_junction, tensor2pil
 from .blip_node import join_caption
 
@@ -15,28 +15,25 @@ danbooru = None
 blip_size = 384
 gpu = text_encoder_device()
 cpu = text_encoder_offload_device()
+model_dir = os.path.join(folder_paths.models_dir, "blip")
 model_url = "https://github.com/AUTOMATIC1111/TorchDeepDanbooru/releases/download/v1/model-resnet_custom_v3.pt"
+model_sha = "3841542cda4dd037da12a565e854b3347bb2eec8fbcd95ea3941b2c68990a355"
 re_special = re.compile(r"([\\()])")
 
 
 def load_danbooru(device_mode):
     global danbooru
     if danbooru is None:
-        blip_dir = os.path.join(folder_paths.models_dir, "blip")
-        if not os.path.exists(blip_dir) and not is_junction(blip_dir):
-            os.makedirs(blip_dir, exist_ok=True)
+        if not os.path.exists(model_dir) and not is_junction(model_dir):
+            os.makedirs(model_dir, exist_ok=True)
 
-        files = download_model(
-            model_path=blip_dir,
-            model_url=model_url,
-            ext_filter=[".pt"],
-            download_name="model-resnet_custom_v3.pt",
-        )
+        model_path = os.path.join(model_dir, "model-resnet_custom_v3.pt")
+        download_file(model_url, model_path, model_sha)
 
         from .models.deepbooru_model import DeepDanbooruModel
 
         danbooru = DeepDanbooruModel()
-        danbooru.load_state_dict(torch.load(files[0], map_location="cpu"))
+        danbooru.load_state_dict(torch.load(model_path, map_location="cpu"))
         danbooru.eval()
 
     if device_mode != "CPU":

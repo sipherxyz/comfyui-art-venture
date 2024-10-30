@@ -1,7 +1,12 @@
 import os
 import re
 import torch
+import hashlib
+import urllib.request
+import urllib.error
+from tqdm import tqdm
 from urllib.parse import urlparse
+from typing import Dict, Optional
 
 
 def natural_sort_key(s, regex=re.compile("([0-9]+)")):
@@ -56,44 +61,89 @@ def load_file_from_url(
     return cached_file
 
 
-def download_model(
-    model_path: str,
-    model_url: str = None,
-    ext_filter=None,
-    download_name=None,
-    ext_blacklist=None,
-) -> list:
-    """
-    A one-and done loader to try finding the desired models in specified directories.
+def calculate_sha(file: str, force=False) -> Optional[str]:
+    sha_file = f"{file}.sha"
 
-    @param download_name: Specify to download from model_url immediately.
-    @param model_url: If no other models are found, this will be downloaded on upscale.
-    @param model_path: The location to store/find models in.
-    @param ext_filter: An optional list of filename extensions to filter by
-    @return: A list of paths containing the desired model(s)
+    # Check if the .sha file exists
+    if not force and os.path.exists(sha_file):
+        try:
+            with open(sha_file, "r") as f:
+                stored_hash = f.read().strip()
+                if stored_hash:
+                    return stored_hash
+        except IOError as e:
+            print(f"Failed to read hash: {e}")
+
+    # Calculate the hash if the .sha file doesn't exist or is empty
+    try:
+        with open(file, "rb") as fp:
+            file_hash = hashlib.sha256()
+            while chunk := fp.read(8192):
+                file_hash.update(chunk)
+            calculated_hash = file_hash.hexdigest()
+
+            # Write the calculated hash to the .sha file
+            try:
+                with open(sha_file, "w") as f:
+                    f.write(calculated_hash)
+            except IOError as e:
+                print(f"Failed to write hash to {sha_file}: {e}")
+
+            return calculated_hash
+    except IOError as e:
+        print(f"Failed to read file {file}: {e}")
+        return None
+
+
+def download_file(url: str, dst: str, sha256sum: Optional[str] = None) -> Dict[str, Optional[str]]:
     """
-    output = []
+    Downloads a file from a URL to a destination path, optionally verifying its SHA-256 checksum.
+
+    :param url: URL of the file to download
+    :param dst: Destination path to save the downloaded file
+    :param sha256sum: Optional SHA-256 checksum to verify the downloaded file
+    :return: Dictionary with file path, download status, calculated checksum, and checksum match status
+    """
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+
+    file_exists = os.path.isfile(dst)
+    file_checksum = None
+    checksum_match = None
+    downloaded = False
 
     try:
-        for full_path in walk_files(model_path, allowed_extensions=ext_filter):
-            if os.path.islink(full_path) and not os.path.exists(full_path):
-                print(f"Skipping broken symlink: {full_path}")
-                continue
-            if ext_blacklist is not None and any(full_path.endswith(x) for x in ext_blacklist):
-                continue
-            if full_path not in output:
-                output.append(full_path)
+        if file_exists:
+            file_checksum = calculate_sha(dst)
+            if sha256sum:
+                checksum_match = file_checksum == sha256sum
+                if not checksum_match:
+                    os.remove(dst)
 
-        if model_url is not None and len(output) == 0:
-            if download_name is not None:
-                output.append(load_file_from_url(model_url, model_dir=model_path, file_name=download_name))
-            else:
-                output.append(model_url)
+        if not file_exists or checksum_match == False:
+            with tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1, desc=dst.split("/")[-1]) as t:
 
-    except Exception:
-        pass
+                def reporthook(blocknum, blocksize, totalsize):
+                    if t.total is None and totalsize > 0:
+                        t.total = totalsize
+                    read_so_far = blocknum * blocksize
+                    t.update(max(0, read_so_far - t.n))
 
-    return output
+                urllib.request.urlretrieve(url, dst, reporthook=reporthook)
+                downloaded = True
+
+                file_checksum = calculate_sha(dst, force=True)
+                if sha256sum:
+                    checksum_match = file_checksum == sha256sum
+
+    except urllib.error.URLError as ex:
+        print("Download failed:", ex)
+        if os.path.isfile(dst):
+            os.remove(dst)
+    except Exception as ex:
+        print("An error occurred:", ex)
+    finally:
+        return {"file": dst, "downloaded": downloaded, "sha": file_checksum, "match": checksum_match}
 
 
 def load_jit_torch_file(model_path: str):

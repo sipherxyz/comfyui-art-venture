@@ -54,23 +54,6 @@ def _construct_pip_command(package_name, version=None):
     return pip_install + [package_name]
 
 
-# modified from https://stackoverflow.com/questions/22058048/hashing-a-file-in-python
-def calculate_file_hash(filename: str, hash_every_n: int = 1):
-    import hashlib
-
-    h = hashlib.sha256()
-    b = bytearray(10 * 1024 * 1024)  # read 10 megabytes at a time
-    mv = memoryview(b)
-    with open(filename, "rb", buffering=0) as f:
-        i = 0
-        # don't hash entire file, only portions of it if requested
-        while n := f.readinto(mv):
-            if i % hash_every_n == 0:
-                h.update(mv[:n])
-            i += 1
-    return h.hexdigest()
-
-
 def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
     nested_keys = name_string.split(".")
     value = dict_inst
