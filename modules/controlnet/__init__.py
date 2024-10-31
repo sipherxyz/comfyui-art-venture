@@ -3,7 +3,7 @@ from typing import List
 import folder_paths
 from nodes import ControlNetLoader, ControlNetApply, ControlNetApplyAdvanced
 
-from .aux import preprocessors, apply_preprocessor
+from .preprocessor import preprocessors, apply_preprocessor
 from .advanced import comfy_load_controlnet
 
 
