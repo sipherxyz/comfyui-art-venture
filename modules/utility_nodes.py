@@ -20,6 +20,42 @@ from .utils import pil2tensor, tensor2pil, ensure_package, get_dict_attribute
 MAX_RESOLUTION = 8192
 
 
+class AnyType(str):
+    """A special class that is always equal in not equal comparisons. Credit to pythongosssss"""
+
+    def __ne__(self, __value: object) -> bool:
+        return False
+
+
+class FlexibleOptionalInputType(dict):
+    """A special class to make flexible nodes that pass data to our python handlers.
+
+    Enables both flexible/dynamic input types (like for Any Switch) or a dynamic number of inputs
+    (like for Any Switch, Context Switch, Context Merge, Power Lora Loader, etc).
+
+    Note, for ComfyUI, all that's needed is the `__contains__` override below, which tells ComfyUI
+    that our node will handle the input, regardless of what it is.
+
+    However, with https://github.com/comfyanonymous/ComfyUI/pull/2666 a large change would occur
+    requiring more details on the input itself. There, we need to return a list/tuple where the first
+    item is the type. This can be a real type, or use the AnyType for additional flexibility.
+
+    This should be forwards compatible unless more changes occur in the PR.
+    """
+
+    def __init__(self, type):
+        self.type = type
+
+    def __getitem__(self, key):
+        return (self.type,)
+
+    def __contains__(self, key):
+        return True
+
+
+any_type = AnyType("*")
+
+
 def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
     if prefix is None:
         prefix = "preview_" + "".join(random.choice("abcdefghijklmnopqrstupvxyz") for x in range(5))
@@ -242,7 +278,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
                 mask = np.array(mask, dtype=np.float32) / 255.0
                 mask = torch.from_numpy(mask)
                 if channel == "alpha":
-                    mask = 1. - mask
+                    mask = 1.0 - mask
             else:
                 mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
@@ -529,6 +565,55 @@ class UtilBooleanPrimitive:
             value = not value
 
         return (value, str(value))
+
+
+class UtilTextSwitchCase:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "switch_cases": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "case_1:output_1\ncase_2:output_2\nthat span multiple lines\ncase_3:output_3",
+                    },
+                ),
+                "condition": ("STRING", {"default": ""}),
+                "default_value": ("STRING", {"default": ""}),
+                "delimiter": ("STRING", {"default": ":"}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "text_switch_case"
+
+    def text_switch_case(self, switch_cases: str, condition: str, default_value: str, delimiter: str = ":"):
+        # Split into cases first
+        cases = switch_cases.split("\n")
+        current_case = None
+        current_output = []
+
+        for line in cases:
+            if delimiter in line:
+                # Process previous case if exists
+                if current_case is not None and condition == current_case:
+                    return ("\n".join(current_output),)
+                
+                # Start new case
+                current_case, output = line.split(delimiter, 1)
+                current_output = [output]
+            elif current_case is not None:
+                current_output.append(line)
+
+        # Check last case
+        if current_case is not None and condition == current_case:
+            return ("\n".join(current_output),)
+
+        return (default_value,)
 
 
 class UtilImageMuxer:
@@ -1194,6 +1279,7 @@ NODE_CLASS_MAPPINGS = {
     "NumberScaler": UtilNumberScaler,
     "MergeModels": UtilModelMerge,
     "TextRandomMultiline": UtilTextRandomMultiline,
+    "TextSwitchCase": UtilTextSwitchCase,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -1229,4 +1315,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "NumberScaler": "Number Scaler",
     "MergeModels": "Merge Models",
     "TextRandomMultiline": "Text Random Multiline",
+    "TextSwitchCase": "Text Switch Case",
 }

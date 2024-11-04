@@ -11,6 +11,8 @@ from ..utils import ensure_package, tensor2pil, pil2base64
 gpt_models = [
     "gpt-3.5-turbo",
     "gpt-3.5-turbo-16k",
+    "gpt-4o",
+    "gpt-4o-mini",
     "gpt-4-turbo",
     "gpt-4-vision-preview",
     "gpt-4-turbo-preview",
@@ -20,9 +22,16 @@ gpt_models = [
     "gpt-4",
 ]
 
-gpt_vision_models = ["gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-vision-preview"]
+gpt_vision_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-vision-preview"]
 
-claude3_models = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
+claude3_models = [
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-opus-latest",
+    "claude-3-opus-20240229",
+    "claude-3-sonnet-20240229",
+    "claude-3-haiku-20240307",
+]
 claude2_models = ["claude-2.1"]
 
 aws_regions = [
@@ -40,6 +49,7 @@ aws_regions = [
 bedrock_anthropic_versions = ["bedrock-2023-05-31"]
 
 bedrock_claude3_models = [
+    "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "anthropic.claude-3-haiku-20240307-v1:0",
     "anthropic.claude-3-sonnet-20240229-v1:0",
     "anthropic.claude-3-opus-20240229-v1:0",

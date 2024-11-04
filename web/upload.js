@@ -3,6 +3,8 @@ import { api } from '../../../scripts/api.js';
 import { $el } from '../../../scripts/ui.js';
 import { createImageHost } from '../../../scripts/ui/imagePreview.js';
 
+import { chainCallback, addKVState } from './utils.js';
+
 const style = `
 .comfy-img-preview video {
   object-fit: contain;
@@ -14,24 +16,6 @@ const style = `
 const URL_REGEX = /^((blob:)?https?:\/\/|\/view\?|\/api\/view\?|data:image\/)/
 
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl', 'LoadVideoFromUrl'];
-
-function chainCallback(object, property, callback) {
-  if (object == undefined) {
-    //This should not happen.
-    console.error('Tried to add callback to non-existant object');
-    return;
-  }
-  if (property in object) {
-    const callback_orig = object[property];
-    object[property] = function () {
-      const r = callback_orig.apply(this, arguments);
-      callback.apply(this, arguments);
-      return r;
-    };
-  } else {
-    object[property] = callback;
-  }
-}
 
 function injectHidden(widget) {
   widget.computeSize = (target_width) => {
@@ -51,59 +35,6 @@ function injectHidden(widget) {
       }
       return widget._type;
     },
-  });
-}
-
-function addKVState(nodeType) {
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    chainCallback(this, 'onConfigure', function (info) {
-      if (!this.widgets) {
-        //Node has no widgets, there is nothing to restore
-        return;
-      }
-      if (typeof info.widgets_values != 'object') {
-        //widgets_values is in some unknown inactionable format
-        return;
-      }
-      let widgetDict = info.widgets_values;
-      if (widgetDict.length == undefined) {
-        for (let w of this.widgets) {
-          if (w.name in widgetDict) {
-            w.value = widgetDict[w.name];
-          } else {
-            //attempt to restore default value
-            let inputs = LiteGraph.getNodeType(this.type).nodeData.input;
-            let initialValue = null;
-            if (inputs?.required?.hasOwnProperty(w.name)) {
-              if (inputs.required[w.name][1]?.hasOwnProperty('default')) {
-                initialValue = inputs.required[w.name][1].default;
-              } else if (inputs.required[w.name][0].length) {
-                initialValue = inputs.required[w.name][0][0];
-              }
-            } else if (inputs?.optional?.hasOwnProperty(w.name)) {
-              if (inputs.optional[w.name][1]?.hasOwnProperty('default')) {
-                initialValue = inputs.optional[w.name][1].default;
-              } else if (inputs.optional[w.name][0].length) {
-                initialValue = inputs.optional[w.name][0][0];
-              }
-            }
-            if (initialValue) {
-              w.value = initialValue;
-            }
-          }
-        }
-      }
-    });
-    chainCallback(this, 'onSerialize', function (info) {
-      info.widgets_values = {};
-      if (!this.widgets) {
-        //object has no widgets, there is nothing to store
-        return;
-      }
-      for (let w of this.widgets) {
-        info.widgets_values[w.name] = w.value;
-      }
-    });
   });
 }
 

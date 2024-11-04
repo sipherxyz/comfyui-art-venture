@@ -67,6 +67,21 @@ Randomizes the order of lines in a multiline string.
 
 ![text random multiline](https://github.com/user-attachments/assets/86f811e3-579e-4ccc-81a3-e216cd851d3c)
 
+#### TextSwitchCase
+
+Switch between multiple cases based on a condition.
+
+**Inputs:**
+
+- `switch_cases`: Switch cases, separated by new lines
+- `condition`: Condition to switch on
+- `default_value`: Default value when no condition matches
+- `delimiter`: Delimiter between case and value, default is `:`
+
+The `switch_cases` format is `case<delimiter>value`, where `case` is the condition to match and `value` is the value to return when the condition matches. You can have new lines in the value to return multiple lines.
+
+![text switch case](https://github.com/user-attachments/assets/4c5450a8-6a3a-4d3c-8c2a-c6e3a33cb95f)
+
 ### Inpainting Nodes
 
 #### PrepareImageAndMaskForInpaint
