@@ -6,8 +6,7 @@ import base64
 import numpy as np
 import importlib
 import subprocess
-import pkg_resources
-from pkg_resources import parse_version
+from importlib.metadata import version, PackageNotFoundError
 from PIL import Image
 
 from .logger import logger
@@ -21,37 +20,55 @@ class AnyType(str):
 any_type = AnyType("*")
 
 
-def ensure_package(package, version=None, install_package_name=None):
+def ensure_package(package, version_required=None, install_package_name=None):
     # Try to import the package
     try:
         module = importlib.import_module(package)
+        if version_required:
+            try:
+                installed_version = version(package)
+                # Compare versions
+                if _compare_versions(installed_version, version_required) < 0:
+                    logger.info(
+                        f"Package {package} is outdated (installed: {installed_version}, required: {version_required}). Upgrading now..."
+                    )
+                    _install_package(install_package_name or package, version_required)
+            except PackageNotFoundError:
+                _install_package(install_package_name or package, version_required)
     except ImportError:
         logger.info(f"Package {package} is not installed. Installing now...")
-        install_command = _construct_pip_command(install_package_name or package, version)
-        subprocess.check_call(install_command)
-    else:
-        # If a specific version is required, check the version
-        if version:
-            installed_version = pkg_resources.get_distribution(package).version
-            if parse_version(installed_version) < parse_version(version):
-                logger.info(
-                    f"Package {package} is outdated (installed: {installed_version}, required: {version}). Upgrading now..."
-                )
-                install_command = _construct_pip_command(install_package_name or package, version)
-                subprocess.check_call(install_command)
+        _install_package(install_package_name or package, version_required)
 
 
-def _construct_pip_command(package_name, version=None):
+def _compare_versions(version1, version2):
+    """Compare two version strings."""
+    def normalize(v):
+        return [int(x) for x in v.split(".")]
+    
+    v1 = normalize(version1)
+    v2 = normalize(version2)
+    
+    for i in range(max(len(v1), len(v2))):
+        n1 = v1[i] if i < len(v1) else 0
+        n2 = v2[i] if i < len(v2) else 0
+        if n1 < n2:
+            return -1
+        elif n1 > n2:
+            return 1
+    return 0
+
+
+def _install_package(package_name, version=None):
+    """Install a package using pip."""
     if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
         pip_install = [sys.executable, "-s", "-m", "pip", "install"]
     else:
         pip_install = [sys.executable, "-m", "pip", "install"]
 
-    # Include the version in the package name if specified
     if version:
         package_name = f"{package_name}=={version}"
 
-    return pip_install + [package_name]
+    subprocess.check_call(pip_install + [package_name])
 
 
 def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
