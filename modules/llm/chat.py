@@ -490,7 +490,7 @@ class LLMMessageNode:
     FUNCTION = "make_message"
     CATEGORY = "ArtVenture/LLM"
 
-    def make_message(self, role, text, image = None, messages: Optional[List[LLMMessage]] = None):
+    def make_message(self, role, text, image: Optional[Tensor] = None, messages: Optional[List[LLMMessage]] = None):
         messages = [] if messages is None else messages.copy()
         
         if role == "system":
