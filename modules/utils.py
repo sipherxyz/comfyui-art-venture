@@ -169,7 +169,14 @@ def pil2tensor(image: Image.Image):
 
 
 def tensor2pil(image: torch.Tensor, mode=None):
-    return numpy2pil(image.cpu().numpy().squeeze(), mode=mode)
+    if image.ndimension() == 4:  # (batch_size, channels, height, width)
+        pil_images = []
+        for i in range(image.size(0)):
+            pil_image = numpy2pil(image[i].cpu().numpy().squeeze(), mode=mode)
+            pil_images.append(pil_image)
+        return pil_images
+    else:
+        return numpy2pil(image.cpu().numpy().squeeze(), mode=mode)
 
 
 def tensor2bytes(image: torch.Tensor) -> bytes:

@@ -84,14 +84,15 @@ class LLMMessageRole(str, Enum):
 class LLMMessage(BaseModel):
     role: LLMMessageRole = LLMMessageRole.user
     text: str
-    image: Optional[str] = None  # base64 enoded image
+    image: Optional[List[str]] = None  # base64 enoded image
 
     def to_openai_message(self):
         content = [{"type": "text", "text": self.text}]
 
         if self.image:
-            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.text}"}})
-
+            for image in self.image:
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}})
+            
         return {
             "role": self.role,
             "content": content,
@@ -489,9 +490,9 @@ class LLMMessageNode:
     FUNCTION = "make_message"
     CATEGORY = "ArtVenture/LLM"
 
-    def make_message(self, role, text, image: Optional[Tensor] = None, messages: Optional[List[LLMMessage]] = None):
+    def make_message(self, role, text, image = None, messages: Optional[List[LLMMessage]] = None):
         messages = [] if messages is None else messages.copy()
-
+        
         if role == "system":
             if isinstance(image, Tensor):
                 raise Exception("System prompt does not support image.")
@@ -501,8 +502,8 @@ class LLMMessageNode:
                 raise Exception("Only one system prompt is allowed.")
 
         if isinstance(image, Tensor):
-            pil = tensor2pil(image)
-            content = pil2base64(pil)
+            pil = tensor2pil(image)            
+            content = [pil2base64(img) for img in pil]
             messages.append(LLMMessage(role=role, text=text, image=content))
         else:
             messages.append(LLMMessage(role=role, text=text))
