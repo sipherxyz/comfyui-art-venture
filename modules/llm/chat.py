@@ -20,6 +20,10 @@ gpt_models = [
     "gpt-4-1106-preview",
     "gpt-4-0613",
     "gpt-4",
+    "o1",
+    "o1-mini",
+    "o1-preview",
+    "o3-mini", 
 ]
 
 gpt_vision_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4-vision-preview"]
