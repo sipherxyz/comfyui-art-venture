@@ -88,11 +88,11 @@ class LLMMessage(BaseModel):
 
     def to_openai_message(self):
         content = [{"type": "text", "text": self.text}]
-
+        
         if self.image:
             for image in self.image:
                 content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image}"}})
-            
+         
         return {
             "role": self.role,
             "content": content,
