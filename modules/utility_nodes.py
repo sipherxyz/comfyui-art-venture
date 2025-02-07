@@ -9,7 +9,6 @@ from typing import List, Dict, Tuple
 
 from PIL import Image, ImageOps, ImageFilter
 import numpy as np
-import re
 
 import folder_paths
 import comfy.utils
@@ -153,7 +152,6 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
     return (images, masks)
 
 
-
 class UtilLoadImageFromUrl:
     def __init__(self) -> None:
         self.output_dir = folder_paths.get_temp_directory()
@@ -174,17 +172,6 @@ class UtilLoadImageFromUrl:
                     {"default": False, "label_on": "list", "label_off": "batch"},
                 ),
                 "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
-                "resize": (
-                    "BOOLEAN",
-                    {"default": False, "label_on": "enabled", "label_off": "disabled"}
-                ),
-                "resize_image": ("INT", {
-                    "default": 512,  # default resize value
-                    "min": 64,  
-                    "max": 2048,  
-                    "step": 64,  # step size
-                    "display": "number"
-                }),
             },
         }
 
@@ -194,19 +181,12 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image(self, image="", keep_alpha_channel=False, output_mode=False, url="", resize=False, resize_image=512):
+    def load_image(self, image="", keep_alpha_channel=False, output_mode=False, url=""):
         if not image or image == "":
             image = url
 
-        # Split the string on both newline "\n" and comma ","
-        urls = re.split(r'[,\n]', image.strip())
-
-        # Remove any empty strings from the resulting list
-        urls = [url for url in urls if url]
-        
-        # Get images and maske from urls
+        urls = image.strip().split("\n")
         images, masks = load_images_from_url(urls, keep_alpha_channel)
-
         if len(images) == 0:
             image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
             mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
@@ -218,15 +198,6 @@ class UtilLoadImageFromUrl:
         np_masks = []
 
         for image, mask in zip(images, masks):
-            # Resize image if resize is enabled
-            if resize:
-                image = image.resize((resize_image, resize_image))
-                if mask is not None:
-                    mask = mask.resize((resize_image, resize_image))
-
-            # Ensure all images are RGB (3 channels)
-            image = image.convert("RGB") 
-
             if mask is not None:
                 preview_image = Image.new("RGB", image.size)
                 preview_image.paste(image, (0, 0))
@@ -241,7 +212,7 @@ class UtilLoadImageFromUrl:
                 mask = np.array(mask).astype(np.float32) / 255.0
                 mask = 1.0 - torch.from_numpy(mask)
             else:
-                mask = torch.zeros((resize_image, resize_image), dtype=torch.float32, device="cpu")
+                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
             np_images.append(image)
             np_masks.append(mask.unsqueeze(0))
@@ -257,17 +228,11 @@ class UtilLoadImageFromUrl:
                         break
 
             if has_size_mismatch:
-                raise Exception(
-                    "To output as batch, all images must have the same size. "
-                    "If you want to use batch mode, please enable the 'resize' option "
-                    "and specify a resize value to ensure all images are the same size."
-                )
+                raise Exception("To output as batch, images must have the same size. Use list output mode instead.")
 
             result = ([torch.cat(np_images)], [torch.cat(np_masks)], True)
 
         return {"ui": {"images": previews}, "result": result}
-
-
 
 
 class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
