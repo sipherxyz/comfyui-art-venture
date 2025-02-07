@@ -21,33 +21,115 @@ class AnyType(str):
 any_type = AnyType("*")
 
 
+def is_uv_installed():
+    """
+    Check if UV (Astral) is installed in the current Python environment.
+
+    This function attempts to import the UV module. If the import is successful, 
+    it returns True, indicating that UV is installed. If the import fails, it 
+    returns False, indicating that UV is not installed.
+
+    Returns:
+        bool: True if UV is installed, False otherwise.
+    """
+    try:
+        import uv
+        return True
+    except ImportError:
+        return False
+
+
 def ensure_package(package, version=None, install_package_name=None):
-    # Try to import the package
+    """
+    Ensure that a specific package is installed in the environment.
+
+    This function checks if the given package is already installed. If it is not, 
+    it attempts to install it. If a specific version is provided, it ensures the 
+    installed version is up to date. The installation can be done using either pip 
+    or UV (Astral) depending on the user's preference or environment.
+
+    Args:
+        package (str): The name of the package to check or install.
+        version (str, optional): The required version of the package. Default is None.
+        install_package_name (str, optional): The package name to install if different 
+                                               from `package`. Default is None.
+        use_uv (bool, optional): Flag to force the use of UV (Astral) for installation. 
+                                  If None, the function will check if UV is installed 
+                                  automatically. Default is None.
+
+    Raises:
+        subprocess.CalledProcessError: If the installation process fails.
+    """
+    # Check if UV should be used for installation or fallback to pip
+    use_uv = is_uv_installed()
+
+    # Construct the installation command based on the selected method
+    if use_uv:
+        install_command = _construct_uv_command(install_package_name or package, version)
+    else:
+        install_command = _construct_pip_command(install_package_name or package, version)
+
+    # Attempt to import the package and install it if necessary
     try:
         module = importlib.import_module(package)
     except ImportError:
         logger.info(f"Package {package} is not installed. Installing now...")
-        install_command = _construct_pip_command(install_package_name or package, version)
         subprocess.check_call(install_command)
     else:
-        # If a specific version is required, check the version
+        # Check if the installed version is up-to-date
         if version:
             installed_version = pkg_resources.get_distribution(package).version
             if parse_version(installed_version) < parse_version(version):
                 logger.info(
                     f"Package {package} is outdated (installed: {installed_version}, required: {version}). Upgrading now..."
                 )
-                install_command = _construct_pip_command(install_package_name or package, version)
                 subprocess.check_call(install_command)
 
 
+def _construct_uv_command(package_name, version=None):
+    """
+    Construct the installation command for UV (Astral).
+
+    This function builds a command to install a package using UV (Astral) if it is available. 
+    If a specific version is provided, it is included in the command.
+
+    Args:
+        package_name (str): The name of the package to install.
+        version (str, optional): The version of the package to install. Default is None.
+
+    Returns:
+        list: The command to execute for UV installation.
+    """
+    if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
+        uv_install = [sys.executable, "-s", "-m", "uv", "add"]
+    else:
+        uv_install = [sys.executable, "-m", "uv", "add"]
+
+    if version:
+        package_name = f"{package_name}{version}"
+
+    return uv_install + [package_name]
+
+
 def _construct_pip_command(package_name, version=None):
+    """
+    Construct the installation command for pip.
+
+    This function builds a command to install a package using pip. If a specific 
+    version is provided, it is included in the command.
+
+    Args:
+        package_name (str): The name of the package to install.
+        version (str, optional): The version of the package to install. Default is None.
+
+    Returns:
+        list: The command to execute for pip installation.
+    """
     if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
         pip_install = [sys.executable, "-s", "-m", "pip", "install"]
     else:
         pip_install = [sys.executable, "-m", "pip", "install"]
 
-    # Include the version in the package name if specified
     if version:
         package_name = f"{package_name}=={version}"
 
