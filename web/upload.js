@@ -329,41 +329,77 @@ function addUploadWidget(nodeType, widgetName, type) {
 }
 
 function patchValueSetter(nodeType, widgetName) {
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === widgetName);
-    pathWidget._value = pathWidget.value;
-    let editing = false;
+  chainCallback(nodeType.prototype, "onNodeCreated", function () {
+    const node = this;
+    const pathWidget = node.widgets.find(w => w.name === widgetName);
+    if (!pathWidget) return;
 
-    const setter = (value) => {
-      if (typeof value !== 'string') value = formatImageUrl(value);
+    let settingFromCallback = false;
 
-      pathWidget._value = value;
-      this.images = (value ?? '').split('\n').filter(Boolean);
-      if (pathWidget.type === 'customtext' && !editing) {
-        pathWidget.inputEl.value = value;
+    node.handleValueChange = (newValue, isProgrammatic = false) => {
+      // Prevent loops: If callback triggers this, and we set widget.value, which might trigger callback again
+      if (settingFromCallback) return;
+
+      try {
+        let processedValue = newValue;
+        if (typeof processedValue !== "string") {
+          processedValue = formatImageUrl(processedValue);
+        }
+
+        node.images = (processedValue ?? "").split("\n").filter(Boolean);
+
+        // Only update the widget's value property if setting programmatically AND the value differs.
+        // This ensures the UI reflects programmatic changes. Changes from the UI itself
+        // are handled via the callback mechanism updating the internal state.
+        if (isProgrammatic && pathWidget.value !== processedValue) {
+          settingFromCallback = true;
+          pathWidget.value = processedValue;
+        }
+
+        // Update linked input element if it's customtext and not currently focused
+        if (pathWidget.type === "customtext" && pathWidget.inputEl) {
+          const isFocused = document.activeElement === pathWidget.inputEl;
+          // Avoid overwriting user input if they are actively typing
+          if (!isFocused && pathWidget.inputEl.value !== processedValue) {
+            pathWidget.inputEl.value = processedValue;
+          }
+        }
+
+        delete app.nodeOutputs[node.id]; // Clear node output cache
+        app.graph.setDirtyCanvas(true, false); // Mark canvas as dirty to ensure previews update
+
+      } catch (e) {
+        console.error("Error in handleValueChange:", e);
+      } finally {
+        settingFromCallback = false;
       }
-      delete app.nodeOutputs[this.id]
     };
 
-    Object.defineProperty(pathWidget, 'value', {
-      set: setter,
-      get: () => pathWidget._value,
-    });
+    pathWidget.callback = (value) => {
+      if (!settingFromCallback) {
+        node.handleValueChange(value, false);
+      }
+    };
 
-    if (pathWidget.type === 'customtext') {
-      pathWidget.inputEl.addEventListener('focus', (e) => {
-        editing = true;
-      });
-      pathWidget.inputEl.addEventListener('blur', (e) => {
-        editing = false;
-      });
-      pathWidget.inputEl.addEventListener('keyup', (e) => {
-        setter(e.target.value);
+    if (pathWidget.type === "customtext" && pathWidget.inputEl) {
+      pathWidget.inputEl.addEventListener("change", (e) => {
+        node.handleValueChange(e.target.value, false);
       });
     }
 
-    pathWidget.callback = setter;
-    pathWidget.value = pathWidget._value;
+    // Process the initial value when the node is created/configured
+    // Use setTimeout to ensure it runs after ComfyUI might have set the initial value from graph data
+    const processInitialValue = () => {
+      if (pathWidget.value !== undefined) {
+        node.handleValueChange(pathWidget.value, true);
+      }
+    };
+
+    chainCallback(node, "onConfigure", function (info) {
+      setTimeout(processInitialValue, 0);
+    });
+
+    setTimeout(processInitialValue, 0);
   });
 }
 
