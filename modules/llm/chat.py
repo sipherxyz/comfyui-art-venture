@@ -90,7 +90,7 @@ class LLMMessage(BaseModel):
         content = [{"type": "text", "text": self.text}]
 
         if self.image:
-            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.text}"}})
+            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.image}"}})
 
         return {
             "role": self.role,
