@@ -1,10 +1,10 @@
-import { app } from '../../../scripts/app.js';
+import { app, ComfyApp } from '../../../scripts/app.js';
 import { api } from '../../../scripts/api.js';
 import { $el } from '../../../scripts/ui.js';
 import { addWidget, DOMWidgetImpl } from '../../../scripts/domWidget.js';
 import { ComfyWidgets } from '../../../scripts/widgets.js'
 
-import { chainCallback, addKVState } from './utils.js';
+import { chainCallback, addKVState, addWidgetChangeCallback, CONVERTED_TYPE } from './utils.js';
 
 const style = `
 .comfy-img-preview video {
@@ -132,13 +132,15 @@ function addUrlWidget(node, name, options) {
 
 function addImageUploadWidget(nodeType, nodeData, imageInputName) {
   const { input } = nodeData ?? {}
-  const { required } = input ?? {}
+  const required = input?.required
   if (!required) return
 
   const imageOptions = required.image
   delete required.image
 
   chainCallback(nodeType.prototype, "onNodeCreated", function () {
+    this.previewMediaType = 'image'
+
     const urlWidget = addUrlWidget(this, imageInputName, imageOptions[1])
     ComfyWidgets.IMAGEUPLOAD(
       this,
@@ -155,6 +157,9 @@ function addImageUploadWidget(nodeType, nodeData, imageInputName) {
       });
     }
 
+    let initialImgs = undefined;
+    let isUrlImageSet = false
+
     const setImagesFromUrl = (value = "") => {
       this.imageIndex = null;
 
@@ -162,28 +167,80 @@ function addImageUploadWidget(nodeType, nodeData, imageInputName) {
       if (!urls.length) {
         this.imgs = undefined;
         this.widgets = this.widgets.filter((w) => w.name !== "$$canvas-image-preview");
+        isUrlImageSet = true;
         return
       }
 
       return Promise.all(
         urls.map(safeLoadImageFromUrl)
       ).then((imgs) => {
-        const initialImgs = imgs.filter(Boolean);
+        initialImgs = imgs.filter(Boolean);
         this.imgs = initialImgs.length > 0 ? initialImgs : undefined;
+        if (!this.imgs) {
+          this.widgets = this.widgets.filter((w) => w.name !== "$$canvas-image-preview");
+        }
         app.graph.setDirtyCanvas(true);
+
+        // cancel any img change in the next 2 seconds
+        // to prevent `ComfyUI `overwriting the image
+        setTimeout(() => {
+          isUrlImageSet = true;
+        }, 2000);
+
         return initialImgs;
       })
     }
 
+    addWidgetChangeCallback(this, {
+      name: "imgs",
+      shouldChange: (value) => {
+        if (isUrlImageSet) return true;
+        return value === initialImgs;
+      }
+    })
+
     const originalUrlCallback = urlWidget.callback
     urlWidget.callback = (value, isProgrammatic = false) => {
+      const isPasting = ComfyApp.clipspace?.pasting === this
+
       if (!isProgrammatic) {
-        originalUrlCallback?.(value)
         urlWidget.options.setValue(value)
-      } else {
+      }
+
+      if (isProgrammatic || isPasting) {
         setImagesFromUrl(value)
+      } else {
+        originalUrlCallback?.(value)
       }
     }
+
+    this.clipspace = () => {
+      const widgets = this.widgets
+        .map(({ type, name, value }) => ({
+          type,
+          name,
+          value,
+        }))
+
+      widgets.push(
+        {
+          type: "text",
+          name: imageInputName,
+          value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
+        },
+        {
+          type: CONVERTED_TYPE,
+          name: imageInputName,
+          value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
+        }
+      )
+
+      return { widgets, images: undefined }
+    }
+
+    requestAnimationFrame(() => {
+      setImagesFromUrl(urlWidget.value);
+    })
   })
 }
 
