@@ -160,9 +160,15 @@ class UtilLoadImageFromUrl:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {},
+            "required": {
+                "image": ("STRING", {
+                    "default": "",
+                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                    "multiline": True,
+                    "dynamicPrompts": False,
+                }),
+            },
             "optional": {
-                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
                 "keep_alpha_channel": (
                     "BOOLEAN",
                     {"default": False, "label_on": "enabled", "label_off": "disabled"},
@@ -171,7 +177,6 @@ class UtilLoadImageFromUrl:
                     "BOOLEAN",
                     {"default": False, "label_on": "list", "label_off": "batch"},
                 ),
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
         }
 
@@ -181,10 +186,7 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image(self, image="", keep_alpha_channel=False, output_mode=False, url=""):
-        if not image or image == "":
-            image = url
-
+    def load_image(self, image: str, keep_alpha_channel=False, output_mode=False):
         urls = image.strip().split("\n")
         images, masks = load_images_from_url(urls, keep_alpha_channel)
         if len(images) == 0:
@@ -240,7 +242,12 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     def INPUT_TYPES(s):
         return {
             "required": {
-                "image": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+                "image": ("STRING", {
+                    "default": "",
+                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                    "multiline": True,
+                    "dynamicPrompts": False,
+                }),
                 "channel": (["alpha", "red", "green", "blue"],),
             },
             "optional": {
@@ -602,7 +609,7 @@ class UtilTextSwitchCase:
                 # Process previous case if exists
                 if current_case is not None and condition == current_case:
                     return ("\n".join(current_output),)
-                
+
                 # Start new case
                 current_case, output = line.split(delimiter, 1)
                 current_output = [output]

@@ -52,7 +52,7 @@ try:
         @classmethod
         def INPUT_TYPES(s):
             inputs = LoadVideoPath.INPUT_TYPES()
-            inputs["required"]["video"] = ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False})
+            inputs["required"]["video"] = ("STRING", {"default": ""})
             return inputs
 
         CATEGORY = "Art Venture/Loaders"

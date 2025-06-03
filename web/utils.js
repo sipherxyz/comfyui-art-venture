@@ -108,6 +108,7 @@ export function addKVState(nodeType) {
         for (let w of this.widgets) {
           if (w.name in widgetDict) {
             w.value = widgetDict[w.name];
+            w.callback?.(w.value)
           } else {
             //attempt to restore default value
             let inputs = LiteGraph.getNodeType(this.type).nodeData.input;
@@ -127,6 +128,7 @@ export function addKVState(nodeType) {
             }
             if (initialValue) {
               w.value = initialValue;
+              w.callback?.(w.value)
             }
           }
         }
