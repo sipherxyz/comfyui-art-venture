@@ -1,10 +1,10 @@
-import { app, ComfyApp } from '../../../scripts/app.js';
+import { app } from '../../../scripts/app.js';
 import { api } from '../../../scripts/api.js';
 import { $el } from '../../../scripts/ui.js';
 import { addWidget, DOMWidgetImpl } from '../../../scripts/domWidget.js';
 import { ComfyWidgets } from '../../../scripts/widgets.js'
 
-import { chainCallback, addKVState, addWidgetChangeCallback, CONVERTED_TYPE } from './utils.js';
+import { chainCallback, addKVState, addWidgetChangeCallback } from './utils.js';
 
 const style = `
 .comfy-img-preview video {
@@ -17,6 +17,8 @@ const style = `
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl'];
 
 const formatUrl = (url) => {
+  if (!url) return ""
+
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url
 
   let type = "output"
@@ -142,6 +144,10 @@ function addImageUploadWidget(nodeType, nodeData, imageInputName) {
     this.previewMediaType = 'image'
 
     const urlWidget = addUrlWidget(this, imageInputName, imageOptions[1])
+    // move urlWidget to the first position
+    const widgets = this.widgets.filter(w => w !== urlWidget)
+    this.widgets = [urlWidget, ...widgets]
+
     ComfyWidgets.IMAGEUPLOAD(
       this,
       'upload',
@@ -199,19 +205,17 @@ function addImageUploadWidget(nodeType, nodeData, imageInputName) {
       }
     })
 
-    const originalUrlCallback = urlWidget.callback
-    urlWidget.callback = (value, isProgrammatic = false) => {
-      const isPasting = ComfyApp.clipspace?.pasting === this
-
-      if (!isProgrammatic) {
+    urlWidget.callback = (value) => {
+      if (!value) { // from upload
+        value = urlWidget.value.split("\n").filter(Boolean).map(formatUrl).join("\n")
+      }
+      if (Array.isArray(value)) {
+        value = value.map(formatUrl).join("\n")
+      }
+      if (value !== urlWidget.options.getValue()) {
         urlWidget.options.setValue(value)
       }
-
-      if (isProgrammatic || isPasting) {
-        setImagesFromUrl(value)
-      } else {
-        originalUrlCallback?.(value)
-      }
+      setImagesFromUrl(value)
     }
 
     this.clipspace = () => {
@@ -229,8 +233,8 @@ function addImageUploadWidget(nodeType, nodeData, imageInputName) {
           value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
         },
         {
-          type: CONVERTED_TYPE,
-          name: imageInputName,
+          type: "text",
+          name: "url",
           value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
         }
       )
