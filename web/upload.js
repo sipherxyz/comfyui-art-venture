@@ -20,8 +20,9 @@ const formatUrl = (url) => {
   if (!url) return ""
 
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url
+  if (url.startsWith("/view") || url.startsWith("/api/view")) return url
 
-  let type = "output"
+  let type = "input"
   if (url.endsWith(']')) {
     const openBracketIndex = url.lastIndexOf('[')
     type = url.slice(openBracketIndex + 1, url.length - 1).trim()
