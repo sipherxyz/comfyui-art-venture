@@ -78,8 +78,7 @@ class PrepareImageAndMaskForInpaint:
                 pil_mask = resize_image(pil_mask.crop(crop_region), width, height, ResizeMode.RESIZE_TO_FIT)
                 pil_mask = pil_mask.convert("L")
             else:
-                np_mask = np.clip((np_mask.astype(np.float32)) * 2, 0, 255).astype(np.uint8)
-                overlay_mask = numpy2pil(np_mask, "L")
+                overlay_mask = pil_mask
 
             pil_img = tensor2pil(img)
             pil_img = flatten_image(pil_img)
