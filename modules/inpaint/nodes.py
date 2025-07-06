@@ -49,6 +49,9 @@ class PrepareImageAndMaskForInpaint:
         if image.shape[0] != mask.shape[0]:
             raise ValueError("image and mask must have same batch size")
 
+        if controlnet_image is not None and image.shape[0] != controlnet_image.shape[0]:
+            raise ValueError("image and controlnet_image must have same batch size")
+
         if image.shape[1] != mask.shape[1] or image.shape[2] != mask.shape[2]:
             raise ValueError("image and mask must have same dimensions")
 
