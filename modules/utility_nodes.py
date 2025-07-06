@@ -5,7 +5,7 @@ import torch
 import base64
 import random
 import requests
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 from PIL import Image, ImageOps, ImageFilter
 import numpy as np
@@ -80,7 +80,7 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
 
 def load_images_from_url(urls: List[str], keep_alpha_channel=False):
     images: List[Image.Image] = []
-    masks: List[Image.Image] = []
+    masks: List[Optional[Image.Image]] = []
 
     for url in urls:
         if url.startswith("data:image/"):
@@ -158,7 +158,7 @@ class UtilLoadImageFromUrl:
         self.filename_prefix = "TempImageFromUrl"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("STRING", {
@@ -188,58 +188,59 @@ class UtilLoadImageFromUrl:
 
     def load_image(self, image: str, keep_alpha_channel=False, output_mode=False):
         urls = image.strip().split("\n")
-        images, masks = load_images_from_url(urls, keep_alpha_channel)
-        if len(images) == 0:
-            image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
-            mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
-            images = [tensor2pil(image)]
-            masks = [tensor2pil(mask, mode="L")]
+        pil_images, pil_masks = load_images_from_url(urls, keep_alpha_channel)
+        has_image = len(pil_images) > 0
+        if not has_image:
+            i = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
+            m = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+            pil_images = [tensor2pil(i)]
+            pil_masks = [tensor2pil(m, mode="L")]
 
         previews = []
-        np_images = []
-        np_masks = []
+        np_images: list[torch.Tensor] = []
+        np_masks: list[torch.Tensor] = []
 
-        for image, mask in zip(images, masks):
-            if mask is not None:
-                preview_image = Image.new("RGB", image.size)
-                preview_image.paste(image, (0, 0))
-                preview_image.putalpha(mask)
+        for pil_image, pil_mask in zip(pil_images, pil_masks):
+            if pil_mask is not None:
+                preview_image = Image.new("RGB", pil_image.size)
+                preview_image.paste(pil_image, (0, 0))
+                preview_image.putalpha(pil_mask)
             else:
-                preview_image = image
+                preview_image = pil_image
 
             previews.append(prepare_image_for_preview(preview_image, self.output_dir, self.filename_prefix))
 
-            image = pil2tensor(image)
-            if mask:
-                mask = np.array(mask).astype(np.float32) / 255.0
-                mask = 1.0 - torch.from_numpy(mask)
+            np_image = pil2tensor(pil_image)
+            if pil_mask:
+                np_mask = np.array(pil_mask).astype(np.float32) / 255.0
+                np_mask = 1.0 - torch.from_numpy(np_mask)
             else:
-                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+                np_mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
-            np_images.append(image)
-            np_masks.append(mask.unsqueeze(0))
+            np_images.append(np_image)
+            np_masks.append(np_mask.unsqueeze(0))
 
         if output_mode:
-            result = (np_images, np_masks, True)
+            result = (np_images, np_masks, has_image)
         else:
             has_size_mismatch = False
             if len(np_images) > 1:
-                for image in np_images[1:]:
-                    if image.shape[1] != np_images[0].shape[1] or image.shape[2] != np_images[0].shape[2]:
+                for np_image in np_images[1:]:
+                    if np_image.shape[1] != np_images[0].shape[1] or np_image.shape[2] != np_images[0].shape[2]:
                         has_size_mismatch = True
                         break
 
             if has_size_mismatch:
                 raise Exception("To output as batch, images must have the same size. Use list output mode instead.")
 
-            result = ([torch.cat(np_images)], [torch.cat(np_masks)], True)
+            result = ([torch.cat(np_images)], [torch.cat(np_masks)], has_image)
 
         return {"ui": {"images": previews}, "result": result}
 
 
 class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("STRING", {
@@ -267,11 +268,11 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
             image = url
 
         urls = image.strip().split("\n")
-        images, alphas = load_images_from_url(urls, True)
+        pil_images, pil_alphas = load_images_from_url(urls, True)
 
         masks: List[torch.Tensor] = []
 
-        for img, alpha in zip(images, alphas):
+        for img, alpha in zip(pil_images, pil_alphas):
             if channel == "alpha":
                 mask = alpha
             elif channel == "red":
@@ -304,7 +305,7 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
 
 class UtilLoadJsonFromText:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "data": (
@@ -324,7 +325,7 @@ class UtilLoadJsonFromText:
 
 class UtilLoadJsonFromUrl:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "url": ("STRING", {"default": ""}),
@@ -352,7 +353,7 @@ class UtilLoadJsonFromUrl:
 
 class UtilGetObjectFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -371,7 +372,7 @@ class UtilGetObjectFromJson:
 
 class UtilGetTextFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -390,7 +391,7 @@ class UtilGetTextFromJson:
 
 class UtilGetFloatFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -409,7 +410,7 @@ class UtilGetFloatFromJson:
 
 class UtilGetIntFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -428,7 +429,7 @@ class UtilGetIntFromJson:
 
 class UtilGetBoolFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -447,7 +448,7 @@ class UtilGetBoolFromJson:
 
 class UtilRandomInt:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -460,7 +461,7 @@ class UtilRandomInt:
     FUNCTION = "random_int"
 
     @classmethod
-    def IS_CHANGED(s, *args, **kwargs):
+    def IS_CHANGED(cls, *args, **kwargs):
         return torch.rand(1).item()
 
     def random_int(self, min: int, max: int):
@@ -470,7 +471,7 @@ class UtilRandomInt:
 
 class UtilRandomFloat:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -483,7 +484,7 @@ class UtilRandomFloat:
     FUNCTION = "random_float"
 
     @classmethod
-    def IS_CHANGED(s, *args, **kwargs):
+    def IS_CHANGED(cls, *args, **kwargs):
         return torch.rand(1).item()
 
     def random_float(self, min: float, max: float):
@@ -493,7 +494,7 @@ class UtilRandomFloat:
 
 class UtilStringToInt:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {"string": ("STRING", {"default": "0"})},
         }
@@ -508,7 +509,7 @@ class UtilStringToInt:
 
 class UtilStringToNumber:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "string": ("STRING", {"default": "0"}),
@@ -533,7 +534,7 @@ class UtilStringToNumber:
 
 class UtilNumberScaler:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -555,7 +556,7 @@ class UtilNumberScaler:
 
 class UtilBooleanPrimitive:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "value": ("BOOLEAN", {"default": False}),
@@ -576,7 +577,7 @@ class UtilBooleanPrimitive:
 
 class UtilTextSwitchCase:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "switch_cases": (
@@ -625,7 +626,7 @@ class UtilTextSwitchCase:
 
 class UtilImageMuxer:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image_1": ("IMAGE",),
@@ -646,7 +647,7 @@ class UtilImageMuxer:
 
 class UtilSDXLAspectRatioSelector:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "aspect_ratio": (
@@ -709,7 +710,7 @@ class UtilSDXLAspectRatioSelector:
 
 class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "aspect_ratio": (
@@ -739,7 +740,7 @@ class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
 
 class UtilDependenciesEdit:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "dependencies": ("DEPENDENCIES",),
@@ -828,7 +829,7 @@ class UtilImageScaleDown:
     crop_methods = ["disabled", "center"]
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -840,7 +841,7 @@ class UtilImageScaleDown:
                     "INT",
                     {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1},
                 ),
-                "crop": (s.crop_methods,),
+                "crop": (cls.crop_methods,),
             }
         }
 
@@ -867,7 +868,7 @@ class UtilImageScaleDown:
         results = []
         for image in s:
             img = tensor2pil(image).convert("RGB")
-            img = img.resize((width, height), Image.LANCZOS)
+            img = img.resize((width, height), Image.Resampling.LANCZOS)
             results.append(pil2tensor(img))
 
         return (torch.cat(results, dim=0),)
@@ -875,7 +876,7 @@ class UtilImageScaleDown:
 
 class UtilImageScaleDownBy(UtilImageScaleDown):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -900,7 +901,7 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
 
 class UtilImageScaleDownToSize(UtilImageScaleDownBy):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -928,7 +929,7 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
 
 class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -969,7 +970,7 @@ class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
 
 class UtilImageAlphaComposite:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image_1": ("IMAGE",),
@@ -1001,7 +1002,7 @@ class UtilImageAlphaComposite:
 
 class UtilImageGaussianBlur:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -1025,7 +1026,7 @@ class UtilImageGaussianBlur:
 
 class UtilImageExtractChannel:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -1055,7 +1056,7 @@ class UtilImageExtractChannel:
 
 class UtilImageApplyChannel:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -1114,13 +1115,13 @@ class UtillQRCodeGenerator:
         import qrcode
 
         if error_correction == "L":
-            error_level = qrcode.constants.ERROR_CORRECT_L
+            error_level = qrcode.ERROR_CORRECT_L
         elif error_correction == "M":
-            error_level = qrcode.constants.ERROR_CORRECT_M
+            error_level = qrcode.ERROR_CORRECT_M
         elif error_correction == "Q":
-            error_level = qrcode.constants.ERROR_CORRECT_Q
+            error_level = qrcode.ERROR_CORRECT_Q
         else:
-            error_level = qrcode.constants.ERROR_CORRECT_H
+            error_level = qrcode.ERROR_CORRECT_H
 
         qr = qrcode.QRCode(version=qr_version, error_correction=error_level, box_size=box_size, border=border)
         qr.add_data(text)
@@ -1133,7 +1134,7 @@ class UtillQRCodeGenerator:
 
 class UtilRepeatImages:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -1151,7 +1152,7 @@ class UtilRepeatImages:
 
 class UtilSeedSelector:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "mode": ("BOOLEAN", {"default": True, "label_on": "random", "label_off": "fixed"}),
@@ -1174,7 +1175,7 @@ class UtilSeedSelector:
 
 class UtilCheckpointSelector:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
@@ -1187,7 +1188,7 @@ class UtilCheckpointSelector:
     FUNCTION = "get_ckpt_name"
 
     @classmethod
-    def IS_CHANGED(s, *args, **kwargs):
+    def IS_CHANGED(cls, *args, **kwargs):
         return torch.rand(1).item()
 
     def get_ckpt_name(self, ckpt_name):
@@ -1196,7 +1197,7 @@ class UtilCheckpointSelector:
 
 class UtilModelMerge:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "model1": ("MODEL",),
@@ -1228,7 +1229,7 @@ class UtilModelMerge:
 
 class UtilTextRandomMultiline:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "text": ("STRING", {"multiline": True, "dynamicPrompts": False}),
