@@ -21,14 +21,17 @@ class PrepareImageAndMaskForInpaint:
                 "mask": ("MASK",),
                 "mask_blur": ("INT", {"default": 4, "min": 0, "max": 64}),
                 "inpaint_masked": ("BOOLEAN", {"default": False}),
-                "mask_padding": ("INT", {"default": 32, "min": 0, "max": 256}),
+                "mask_padding": ("INT", {"default": 32, "min": 0, "max": 1024}),
                 "width": ("INT", {"default": 0, "min": 0, "max": 2048}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 2048}),
+            },
+            "optional": {
+                "controlnet_image": ("IMAGE",),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "CROP_REGION")
-    RETURN_NAMES = ("inpaint_image", "inpaint_mask", "overlay_image", "crop_region")
+    RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "CROP_REGION", "IMAGE")
+    RETURN_NAMES = ("inpaint_image", "inpaint_mask", "overlay_image", "crop_region", "controlnet_image")
     CATEGORY = "Art Venture/Inpainting"
     FUNCTION = "prepare"
 
@@ -36,12 +39,12 @@ class PrepareImageAndMaskForInpaint:
         self,
         image: torch.Tensor,
         mask: torch.Tensor,
-        # resize_mode: str,
         mask_blur: int,
         inpaint_masked: bool,
         mask_padding: int,
         width: int,
         height: int,
+        controlnet_image: torch.Tensor = None,
     ):
         if image.shape[0] != mask.shape[0]:
             raise ValueError("image and mask must have same batch size")
@@ -49,18 +52,20 @@ class PrepareImageAndMaskForInpaint:
         if image.shape[1] != mask.shape[1] or image.shape[2] != mask.shape[2]:
             raise ValueError("image and mask must have same dimensions")
 
-        if width == 0 and height == 0:
-            height, width = image.shape[1:3]
-            
-        sourceheight, sourcewidth = image.shape[1:3]
+        # These are only used if inpaint_masked is True
+        out_width, out_height = width, height
+        if inpaint_masked and out_width == 0 and out_height == 0:
+            out_height, out_width = image.shape[1:3]
 
-        masks = []
+        source_height, source_width = image.shape[1:3]
+
         images = []
-        overlay_masks = []
+        masks = []
         overlay_images = []
         crop_regions = []
+        processed_controlnet_images = []
 
-        for img, msk in zip(image, mask):
+        for idx, (img, msk) in enumerate(zip(image, mask)):
             np_mask: np.ndarray = msk.cpu().numpy()
 
             if mask_blur > 0:
@@ -68,40 +73,73 @@ class PrepareImageAndMaskForInpaint:
                 np_mask = cv2.GaussianBlur(np_mask, (kernel_size, kernel_size), mask_blur)
 
             pil_mask = numpy2pil(np_mask, "L")
-            crop_region = None
+            pil_img = tensor2pil(img)
+            
+            # --- LOGIC SEPARATION ---
 
             if inpaint_masked:
+                # --- MODE 1: CROP AND RESIZE ---
                 crop_region = get_crop_region(np_mask, mask_padding)
-                crop_region = expand_crop_region(crop_region, width, height, sourcewidth, sourceheight)
-                # crop mask
-                overlay_mask = pil_mask
-                pil_mask = resize_image(pil_mask.crop(crop_region), width, height, ResizeMode.RESIZE_TO_FIT)
-                pil_mask = pil_mask.convert("L")
+                crop_region = expand_crop_region(crop_region, out_width, out_height, source_width, source_height)
+                
+                cropped_img = pil_img.crop(crop_region)
+                cropped_mask = pil_mask.crop(crop_region)
+
+                final_pil_img = resize_image(cropped_img, out_width, out_height, ResizeMode.RESIZE_TO_FIT)
+                final_pil_mask = resize_image(cropped_mask, out_width, out_height, ResizeMode.RESIZE_TO_FIT).convert("L")
+
+                if controlnet_image is not None:
+                    pil_cimg = tensor2pil(controlnet_image[idx])
+                    cn_source_width, cn_source_height = pil_cimg.size
+                    scale_x = cn_source_width / source_width
+                    scale_y = cn_source_height / source_height
+                    
+                    cn_target_width = int(out_width * scale_x)
+                    cn_target_height = int(out_height * scale_y)
+                    
+                    x1, y1, x2, y2 = crop_region
+                    cn_crop_region = (int(x1 * scale_x), int(y1 * scale_y), int(x2 * scale_x), int(y2 * scale_y))
+                    cropped_cn_img = pil_cimg.crop(cn_crop_region)
+                    final_cn_img = resize_image(cropped_cn_img, cn_target_width, cn_target_height, ResizeMode.RESIZE_TO_FIT)
+                    processed_controlnet_images.append(pil2tensor(final_cn_img))
+
             else:
-                overlay_mask = pil_mask
+                # --- MODE 2: PASS-THROUGH (NO RESIZING) ---
+                final_pil_img = pil_img
+                final_pil_mask = pil_mask # Already blurred if requested
+                crop_region = (0, 0, source_width, source_height)
 
-            pil_img = tensor2pil(img)
-            pil_img = flatten_image(pil_img)
+                if controlnet_image is not None:
+                    # Simply pass the original controlnet image through
+                    final_cn_img = tensor2pil(controlnet_image[idx])
+                    processed_controlnet_images.append(pil2tensor(final_cn_img))
 
+            # --- COMMON LOGIC FOR BOTH MODES ---
+            
+            # The overlay/preview should always be based on the original full-size image
             image_masked = Image.new("RGBa", (pil_img.width, pil_img.height))
-            image_masked.paste(pil_img.convert("RGBA").convert("RGBa"), mask=ImageOps.invert(overlay_mask))
+            # The mask used here is the potentially blurred one, but before any cropping/resizing
+            image_masked.paste(pil_img.convert("RGBA").convert("RGBa"), mask=ImageOps.invert(pil_mask))
             overlay_images.append(pil2tensor(image_masked.convert("RGBA")))
-            overlay_masks.append(pil2tensor(overlay_mask))
 
-            if crop_region is not None:
-                pil_img = resize_image(pil_img.crop(crop_region), width, height, ResizeMode.RESIZE_TO_FIT)
-            else:
-                crop_region = (0, 0, 0, 0)
-
-            images.append(pil2tensor(pil_img))
-            masks.append(pil2tensor(pil_mask))
+            images.append(pil2tensor(final_pil_img))
+            masks.append(pil2tensor(final_pil_mask))
             crop_regions.append(torch.tensor(crop_region, dtype=torch.int64))
+
+
+        if processed_controlnet_images:
+            final_controlnet_tensor = torch.cat(processed_controlnet_images, dim=0)
+        else:
+            # If no controlnet image is provided, create a black 64x64 placeholder
+            batch_size = image.shape[0]
+            final_controlnet_tensor = torch.zeros((batch_size, 64, 64, 3), dtype=torch.float32, device=image.device)
 
         return (
             torch.cat(images, dim=0),
             torch.cat(masks, dim=0),
             torch.cat(overlay_images, dim=0),
-            torch.stack(crop_regions),
+            torch.stack(crop_regions, dim=0),
+            final_controlnet_tensor,
         )
 
 
