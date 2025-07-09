@@ -5,9 +5,10 @@ import torch
 import base64
 import numpy as np
 import importlib
+import importlib.metadata
 import subprocess
-import pkg_resources
-from pkg_resources import parse_version
+from packaging import version
+from packaging.specifiers import SpecifierSet
 from PIL import Image
 
 from .logger import logger
@@ -21,23 +22,40 @@ class AnyType(str):
 any_type = AnyType("*")
 
 
-def ensure_package(package, version=None, install_package_name=None):
+def ensure_package(package, required_version=None, install_package_name=None):
     # Try to import the package
     try:
         module = importlib.import_module(package)
     except ImportError:
         logger.info(f"Package {package} is not installed. Installing now...")
-        install_command = _construct_pip_command(install_package_name or package, version)
+        install_command = _construct_pip_command(install_package_name or package, required_version)
         subprocess.check_call(install_command)
     else:
         # If a specific version is required, check the version
-        if version:
-            installed_version = pkg_resources.get_distribution(package).version
-            if parse_version(installed_version) < parse_version(version):
-                logger.info(
-                    f"Package {package} is outdated (installed: {installed_version}, required: {version}). Upgrading now..."
-                )
-                install_command = _construct_pip_command(install_package_name or package, version)
+        if required_version:
+            try:
+                installed_version = importlib.metadata.version(package)
+                
+                # Parse version specifier (e.g., ">=1.1.1", "==1.1.1", "<=1.1.1")
+                if any(op in required_version for op in ['>=', '<=', '==', '!=', '>', '<', '~=']):
+                    spec = SpecifierSet(required_version)
+                    if installed_version not in spec:
+                        logger.info(
+                            f"Package {package} version constraint not satisfied (installed: {installed_version}, required: {required_version}). Installing now..."
+                        )
+                        install_command = _construct_pip_command(install_package_name or package, required_version)
+                        subprocess.check_call(install_command)
+                else:
+                    # Fallback to simple version comparison for backwards compatibility
+                    if version.parse(installed_version) < version.parse(required_version):
+                        logger.info(
+                            f"Package {package} is outdated (installed: {installed_version}, required: {required_version}). Upgrading now..."
+                        )
+                        install_command = _construct_pip_command(install_package_name or package, required_version)
+                        subprocess.check_call(install_command)
+            except importlib.metadata.PackageNotFoundError:
+                logger.info(f"Package {package} version information not found. Installing required version {required_version}...")
+                install_command = _construct_pip_command(install_package_name or package, required_version)
                 subprocess.check_call(install_command)
 
 
