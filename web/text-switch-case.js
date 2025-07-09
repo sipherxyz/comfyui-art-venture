@@ -1,10 +1,9 @@
-import { app } from '../../../scripts/app.js';
-import { ComfyWidgets } from '../../../scripts/widgets.js';
+import { app } from '../../scripts/app.js';
+import { ComfyWidgets } from '../../scripts/widgets.js';
 
 import {
   addKVState,
   chainCallback,
-  hideWidgetForGood,
   addWidgetChangeCallback,
 } from './utils.js';
 

@@ -1,8 +1,8 @@
-import { app } from '../../../scripts/app.js';
-import { api } from '../../../scripts/api.js';
-import { $el } from '../../../scripts/ui.js';
-import { addWidget, DOMWidgetImpl } from '../../../scripts/domWidget.js';
-import { ComfyWidgets } from '../../../scripts/widgets.js'
+import { app } from '../../scripts/app.js';
+import { api } from '../../scripts/api.js';
+import { $el } from '../../scripts/ui.js';
+import { addWidget, DOMWidgetImpl } from '../../scripts/domWidget.js';
+import { ComfyWidgets } from '../../scripts/widgets.js'
 
 import { chainCallback, addKVState, addWidgetChangeCallback } from './utils.js';
 
