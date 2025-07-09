@@ -1,5 +1,4 @@
 import os
-import inspect
 from typing import Dict
 
 import folder_paths
@@ -36,6 +35,9 @@ try:
         @classmethod
         def INPUT_TYPES(s):
             inputs = FaceDetailer.INPUT_TYPES()
+            if not "optional" in inputs:
+                inputs["optional"] = {}
+
             inputs["optional"]["enabled"] = (
                 "BOOLEAN",
                 {"default": True, "label_on": "enabled", "label_off": "disabled"},
@@ -75,6 +77,9 @@ try:
         @classmethod
         def INPUT_TYPES(s):
             inputs = FaceDetailerPipe.INPUT_TYPES()
+            if not "optional" in inputs:
+                inputs["optional"] = {}
+
             inputs["optional"]["enabled"] = (
                 "BOOLEAN",
                 {"default": True, "label_on": "enabled", "label_off": "disabled"},
