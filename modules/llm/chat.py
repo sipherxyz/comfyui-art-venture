@@ -105,13 +105,14 @@ class LLMMessageRole(str, Enum):
 class LLMMessage(BaseModel):
     role: LLMMessageRole = LLMMessageRole.user
     text: str
-    image: Optional[str] = None  # base64 enoded image
+    images: Optional[List[str]] = None  # list of base64 encoded images
 
     def to_openai_message(self):
         content = [{"type": "text", "text": self.text}]
 
-        if self.image:
-            content.insert(0, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.image}"}})
+        if self.images:
+            for img in self.images:
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}})
 
         return {
             "role": self.role,
@@ -121,14 +122,14 @@ class LLMMessage(BaseModel):
     def to_claude_message(self):
         content = [{"type": "text", "text": self.text}]
 
-        if self.image:
-            content.insert(
-                0,
-                {
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": "image/png", "data": self.image},
-                },
-            )
+        if self.images:
+            for img in reversed(self.images):
+                content.append(
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/png", "data": img},
+                    }
+                )
 
         return {
             "role": self.role,
@@ -381,9 +382,9 @@ class ClaudeApiNode:
 
     def create_api(self, claude_api_key, endpoint, version):
         if not claude_api_key or claude_api_key == "":
-            claude_api_key = os.environ.get("CLAUDE_API_KEY")
+            claude_api_key = os.environ.get("ANTHROPIC_API_KEY", os.environ.get("CLAUDE_API_KEY"))
         if not claude_api_key:
-            raise Exception("Claude API key is required.")
+            raise Exception("Anthropic API key is required.")
 
         return (ClaudeApi(api_key=claude_api_key, endpoint=endpoint, version=version),)
 
@@ -522,9 +523,17 @@ class LLMMessageNode:
                 raise Exception("Only one system prompt is allowed.")
 
         if isinstance(image, Tensor):
-            pil = tensor2pil(image)
-            content = pil2base64(pil)
-            messages.append(LLMMessage(role=role, text=text, image=content))
+            if len(image.shape) == 4:  # Batch of images
+                images = []
+                for i in range(image.shape[0]):
+                    pil = tensor2pil(image[i])
+                    content = pil2base64(pil)
+                    images.append(content)
+                messages.append(LLMMessage(role=role, text=text, images=images))
+            else:  # Single image
+                pil = tensor2pil(image)
+                content = pil2base64(pil)
+                messages.append(LLMMessage(role=role, text=text, images=[content]))
         else:
             messages.append(LLMMessage(role=role, text=text))
 
