@@ -5,7 +5,7 @@ from PIL import Image, ImageOps
 from typing import Dict
 
 from .sam.nodes import SAMLoader, GetSAMEmbedding, SAMEmbeddingToImage
-from .lama import LaMaInpaint
+from .lama import LaMaInpaint, LaMaInpaintWithModel
 
 from ..masking import get_crop_region, expand_crop_region
 from ..image_utils import ResizeMode, resize_image, flatten_image
@@ -239,6 +239,7 @@ NODE_CLASS_MAPPINGS = {
     "GetSAMEmbedding": GetSAMEmbedding,
     "SAMEmbeddingToImage": SAMEmbeddingToImage,
     "LaMaInpaint": LaMaInpaint,
+    "LaMaInpaintWithModel": LaMaInpaintWithModel,
     "PrepareImageAndMaskForInpaint": PrepareImageAndMaskForInpaint,
     "OverlayInpaintedLatent": OverlayInpaintedLatent,
     "OverlayInpaintedImage": OverlayInpaintedImage,
@@ -249,6 +250,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetSAMEmbedding": "Get SAM Embedding",
     "SAMEmbeddingToImage": "SAM Embedding to Image",
     "LaMaInpaint": "LaMa Remove Object",
+    "LaMaInpaintWithModel": "LaMa Remove With Model",
     "PrepareImageAndMaskForInpaint": "Prepare Image & Mask for Inpaint",
     "OverlayInpaintedLatent": "Overlay Inpainted Latent",
     "OverlayInpaintedImage": "Overlay Inpainted Image",

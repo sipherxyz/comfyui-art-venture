@@ -8,8 +8,16 @@ import comfy.model_management as model_management
 
 from ...model_utils import download_file
 
+if "lama" not in folder_paths.folder_names_and_paths:
+    folder_paths.folder_names_and_paths["lama"] = (
+        [
+            os.path.join(folder_paths.models_dir, "lama"),
+        ],
+        folder_paths.supported_pt_extensions,
+    )
 
 lama = None
+lama_local = {}
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
 model_dir = os.path.join(folder_paths.models_dir, "lama")
@@ -42,6 +50,15 @@ def load_model():
     return lama
 
 
+def load_model_local(model_name):
+    if model_name not in lama_local:
+        model_path = os.path.join(model_dir, model_name)
+        lama_local[model_name] = torch.jit.load(model_path, map_location="cpu")
+        lama_local[model_name].eval()
+
+    return lama_local[model_name]
+
+
 class LaMaInpaint:
     @classmethod
     def INPUT_TYPES(s):
@@ -69,6 +86,62 @@ class LaMaInpaint:
         device = gpu if device_mode != "CPU" else cpu
 
         model = load_model()
+        model.to(device)
+
+        try:
+            inpainted = []
+            orig_w = image.shape[2]
+            orig_h = image.shape[1]
+
+            for i, img in enumerate(image):
+                img = img.permute(2, 0, 1).unsqueeze(0)
+                msk = mask[i].detach().cpu()
+                msk = (msk > 0) * 1.0
+                msk = msk.unsqueeze(0).unsqueeze(0)
+
+                src_image = pad_tensor_to_modulo(img, 8).to(device)
+                src_mask = pad_tensor_to_modulo(msk, 8).to(device)
+
+                res = model(src_image, src_mask)
+                res = res[0].permute(1, 2, 0).detach().cpu()
+                res = res[:orig_h, :orig_w]
+
+                inpainted.append(res)
+
+            return (torch.stack(inpainted),)
+        finally:
+            if device_mode == "AUTO":
+                model.to(cpu)
+
+
+class LaMaInpaintWithModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "mask": ("MASK",),
+                "model_name": (folder_paths.get_filename_list("lama"),),
+            },
+            "optional": {"device_mode": (["AUTO", "Prefer GPU", "CPU"],)},
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    CATEGORY = "Art Venture/Inpainting"
+    FUNCTION = "lama_inpaint_with_model"
+
+    def lama_inpaint_with_model(
+        self,
+        image: torch.Tensor,
+        mask: torch.Tensor,
+        model_name: str,
+        device_mode="AUTO",
+    ):
+        if image.shape[0] != mask.shape[0]:
+            raise Exception("Image and mask must have the same batch size")
+
+        device = gpu if device_mode != "CPU" else cpu
+        model = load_model_local(model_name)
         model.to(device)
 
         try:
