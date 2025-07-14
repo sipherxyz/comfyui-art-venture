@@ -16,21 +16,17 @@ try:
     module_path = None
 
     for custom_node in custom_nodes:
-        custom_node = (
-            custom_node if not os.path.islink(custom_node) else os.readlink(custom_node)
-        )
+        custom_node = custom_node if not os.path.islink(custom_node) else os.readlink(custom_node)
         for module_dir in efficieny_dir_names:
             if module_dir in os.listdir(custom_node):
-                module_path = os.path.abspath(
-                    os.path.join(custom_node, module_dir)
-                )
+                module_path = os.path.abspath(os.path.join(custom_node, module_dir))
                 break
 
     if module_path is None:
         raise Exception("Could not find efficiency nodes")
 
     module = load_module(module_path)
-    print("Loaded efficiency nodes from", module_path)
+    print("Loaded Efficiency nodes from", module_path)
 
     nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
 
@@ -108,9 +104,7 @@ try:
             if lora_override != "None":
                 lora_name = lora_override
 
-            return super().efficientloader(
-                ckpt_name, vae_name, clip_skip, lora_name, *args, **kwargs
-            )
+            return super().efficientloader(ckpt_name, vae_name, clip_skip, lora_name, *args, **kwargs)
 
     NODE_CLASS_MAPPINGS.update(
         {

@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn.functional as F
 import numpy as np
+from PIL import Image
 from torch import nn
 from torch.autograd import Variable
 from torchvision import transforms
@@ -11,17 +12,30 @@ import folder_paths
 import comfy.model_management as model_management
 import comfy.utils
 
-from ..model_utils import download_model
+from ..model_utils import download_file
 from ..utils import pil2tensor, tensor2pil
 from ..logger import logger
 
 
 isnets = {}
+cache_size = [1024, 1024]
 gpu = model_management.get_torch_device()
 cpu = torch.device("cpu")
 model_dir = os.path.join(folder_paths.models_dir, "isnet")
-model_url = "https://huggingface.co/NimaBoscarino/IS-Net_DIS-general-use/resolve/main/isnet-general-use.pth"
-cache_size = [1024, 1024]
+models = {
+    "isnet-general-use.pth": {
+        "url": "https://huggingface.co/NimaBoscarino/IS-Net_DIS-general-use/resolve/main/isnet-general-use.pth",
+        "sha": "9e1aafea58f0b55d0c35077e0ceade6ba1ba2bce372fd4f8f77215391f3fac13",
+    },
+    "isnetis.pth": {
+        "url": "https://github.com/Sanster/models/releases/download/isnetis/isnetis.pth",
+        "sha": "90a970badbd99ca7839b4e0beb09a36565d24edba7e4a876de23c761981e79e0",
+    },
+    "RMBG-1.4.bin": {
+        "url": "https://huggingface.co/briaai/RMBG-1.4/resolve/main/pytorch_model.bin",
+        "sha": "59569acdb281ac9fc9f78f9d33b6f9f17f68e25086b74f9025c35bb5f2848967",
+    },
+}
 
 folder_paths.folder_names_and_paths["isnet"] = (
     [model_dir],
@@ -72,23 +86,28 @@ def load_isnet_model(model_name):
 def im_preprocess(im: torch.Tensor, size):
     im = im.clone()
 
+    # Ensure the image has three channels
     if len(im.shape) < 3:
         im = im.unsqueeze(2)
     if im.shape[2] == 1:
         im = im.repeat(1, 1, 3)
 
-    im_tensor = torch.transpose(torch.transpose(im, 1, 2), 0, 1)
-    if len(size) < 2:
-        return im_tensor, im.shape[0:2]
-    else:
-        im_tensor = torch.unsqueeze(im_tensor, 0)
-        im_tensor = F.upsample(im_tensor, size, mode="bilinear")
-        im_tensor = torch.squeeze(im_tensor, 0)
+    # Permute dimensions to match the model input format (C, H, W)
+    im_tensor = im.permute(2, 0, 1)
 
-    return transform(im_tensor).unsqueeze(0), im.shape[0:2]
+    # Resize the image
+    im_tensor = F.interpolate(im_tensor.unsqueeze(0), size=size, mode="bilinear").squeeze(0)
+
+    # Normalize the image
+    im_tensor = normalize(im_tensor, [0.5, 0.5, 0.5], [1.0, 1.0, 1.0])
+
+    # Return the processed image tensor with a batch dimension and original size
+    return im_tensor.unsqueeze(0), im.shape[0:2]
 
 
-def predict(model, image: torch.Tensor, orig_size, device):
+def predict(model, im: torch.Tensor, device):
+    image, orig_size = im_preprocess(im, cache_size)
+
     if model.is_fp16:
         image = image.type(torch.HalfTensor)
     else:
@@ -110,14 +129,16 @@ def predict(model, image: torch.Tensor, orig_size, device):
     pred_val = ds_val[0, :, :, :]
 
     # recover the prediction spatial size to the orignal image size
-    pred_val = torch.squeeze(F.upsample(torch.unsqueeze(pred_val, 0), (orig_size[0], orig_size[1]), mode="bilinear"))
+    # pred_val = torch.squeeze(F.interpolate(pred_val, size=orig_size, mode='bilinear'), 0)
+    # pred_val = torch.squeeze(F.upsample(torch.unsqueeze(pred_val, 0), (orig_size[0], orig_size[1]), mode="bilinear"))
+    pred_val = F.interpolate(pred_val.unsqueeze(0), size=orig_size, mode="bilinear").squeeze(0)
 
     ma = torch.max(pred_val)
     mi = torch.min(pred_val)
     pred_val = (pred_val - mi) / (ma - mi)  # max = 1
 
     # it is the mask we need
-    return (pred_val.detach().cpu().numpy() * 255).astype(np.uint8)
+    return pred_val.detach().cpu()
 
 
 class ISNetLoader:
@@ -126,7 +147,6 @@ class ISNetLoader:
         return {
             "required": {
                 "model_name": (folder_paths.get_filename_list("isnet"),),
-                "model_override": ("STRING", {"default": "None"}),
             },
         }
 
@@ -134,15 +154,33 @@ class ISNetLoader:
     FUNCTION = "load_isnet"
     CATEGORY = "Art Venture/Segmentation"
 
-    def load_isnet(self, model_name, model_override="None"):
-        if model_override != "None":
-            if model_override not in folder_paths.get_filename_list("isnet"):
-                logger.warning(f"Model override {model_override} not found. Use {model_name} instead.")
-            else:
-                model_name = model_override
+    def load_isnet(self, model_name):
+        return (load_isnet_model(model_name),)
 
-        model = load_isnet_model(model_name)
-        return (model,)
+
+class DownloadISNetModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (list(models.keys()),),
+            },
+        }
+
+    RETURN_TYPES = ("ISNET_MODEL",)
+    FUNCTION = "download_isnet"
+    CATEGORY = "Art Venture/Segmentation"
+
+    def download_isnet(self, model_name):
+        if model_name not in folder_paths.get_filename_list("isnet"):
+            model_info = models[model_name]
+            download_file(
+                model_info["url"],
+                os.path.join(model_dir, model_name),
+                model_info["sha"],
+            )
+
+        return (load_isnet_model(model_name),)
 
 
 class ISNetSegment:
@@ -171,15 +209,8 @@ class ISNetSegment:
             return (images, masks)
 
         if isnet_model is None:
-            ckpts = folder_paths.get_filename_list("isnet")
-            if len(ckpts) == 0:
-                ckpts = download_model(
-                    model_path=model_dir,
-                    model_url=model_url,
-                    ext_filter=[".pth"],
-                    download_name="isnet-general-use.pth",
-                )
-            isnet_model = load_isnet_model(ckpts[0])
+            downloader = DownloadISNetModel()
+            isnet_model = downloader.download_isnet("isnet-general-use.pth")[0]
 
         device = gpu if device_mode != "CPU" else cpu
         isnet_model = isnet_model.to(device)
@@ -188,16 +219,12 @@ class ISNetSegment:
             segments = []
             masks = []
             for image in images:
-                im, im_orig_size = im_preprocess(image, cache_size)
-                mask = predict(isnet_model, im, im_orig_size, device)
-                mask = mask / 255.0
-                mask = np.clip(mask > threshold, 0, 1).astype(np.float32)
-                mask = torch.from_numpy(mask).float()
-                masks.append(mask)
+                mask = predict(isnet_model, image, device)
+                mask_im = tensor2pil(mask.permute(1, 2, 0))
+                cropped = Image.new("RGBA", mask_im.size, (0, 0, 0, 0))
+                cropped.paste(tensor2pil(image), mask=mask_im)
 
-                mask = tensor2pil(mask, "L")
-                cropped = tensor2pil(image, "RGB")
-                cropped.putalpha(mask)
+                masks.append(mask)
                 segments.append(pil2tensor(cropped))
 
             return (torch.cat(segments, dim=0), torch.stack(masks))

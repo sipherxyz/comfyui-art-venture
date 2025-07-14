@@ -7,17 +7,25 @@ from torchvision.transforms.functional import InterpolationMode
 import folder_paths
 from comfy.model_management import text_encoder_device, text_encoder_offload_device, soft_empty_cache
 
-from ..model_utils import download_model
+from ..model_utils import download_file
 from ..utils import tensor2pil
 
 blips = {}
 blip_size = 384
 gpu = text_encoder_device()
 cpu = text_encoder_offload_device()
-model_url = (
-    "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth"
-)
 model_dir = os.path.join(folder_paths.models_dir, "blip")
+models = {
+    "model_base_caption_capfilt_large.pth": {
+        "url": "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_caption_capfilt_large.pth",
+        "sha": "96ac8749bd0a568c274ebe302b3a3748ab9be614c737f3d8c529697139174086",
+    },
+    "model_base_capfilt_large.pth": {
+        "url": "https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_capfilt_large.pth",
+        "sha": "8f5187458d4d47bb87876faf3038d5947eff17475edf52cf47b62e84da0b235f",
+    },
+}
+
 
 folder_paths.folder_names_and_paths["blip"] = (
     [model_dir],
@@ -90,12 +98,7 @@ def join_caption(caption, prefix, suffix):
 
 def blip_caption(model, image, min_length, max_length):
     image = tensor2pil(image)
-
-    if "transformers==4.26.1" in packages(True):
-        print("Using Legacy `transformImaage()`")
-        tensor = transformImage_legacy(image)
-    else:
-        tensor = transformImage(image)
+    tensor = transformImage(image)
 
     with torch.no_grad():
         caption = model.generate(
@@ -122,8 +125,32 @@ class BlipLoader:
     CATEGORY = "Art Venture/Captioning"
 
     def load_blip(self, model_name):
-        model = load_blip(model_name)
-        return (model,)
+        return (load_blip(model_name),)
+
+
+class DownloadAndLoadBlip:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": (list(models.keys()),),
+            },
+        }
+
+    RETURN_TYPES = ("BLIP_MODEL",)
+    FUNCTION = "download_and_load_blip"
+    CATEGORY = "Art Venture/Captioning"
+
+    def download_and_load_blip(self, model_name):
+        if model_name not in folder_paths.get_filename_list("blip"):
+            model_info = models[model_name]
+            download_file(
+                model_info["url"],
+                os.path.join(model_dir, model_name),
+                model_info["sha"],
+            )
+
+        return (load_blip(model_name),)
 
 
 class BlipCaption:
@@ -170,18 +197,11 @@ class BlipCaption:
         self, image, min_length, max_length, device_mode="AUTO", prefix="", suffix="", enabled=True, blip_model=None
     ):
         if not enabled:
-            return (join_caption("", prefix, suffix),)
+            return ([join_caption("", prefix, suffix)],)
 
         if blip_model is None:
-            ckpts = folder_paths.get_filename_list("blip")
-            if len(ckpts) == 0:
-                ckpts = download_model(
-                    model_path=model_dir,
-                    model_url=model_url,
-                    ext_filter=[".pth"],
-                    download_name="model_base_caption_capfilt_large.pth",
-                )
-            blip_model = load_blip(ckpts[0])
+            downloader = DownloadAndLoadBlip()
+            blip_model = downloader.download_and_load_blip("model_base_caption_capfilt_large.pth")[0]
 
         device = gpu if device_mode != "CPU" else cpu
         blip_model = blip_model.to(device)

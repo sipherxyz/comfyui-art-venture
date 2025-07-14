@@ -1,4 +1,4 @@
-timm==0.6.13
+timm
 transformers
 fairscale
 pycocoevalcap
@@ -7,3 +7,7 @@ qrcode[pil]
 pytorch_lightning
 kornia
 pydantic
+segment_anything
+omegaconf
+boto3>=1.34.101
+google-generativeai>=0.8.0

@@ -3,11 +3,8 @@ from typing import List
 import folder_paths
 from nodes import ControlNetLoader, ControlNetApply, ControlNetApplyAdvanced
 
-from .preprocessors import control_net_preprocessors, DummyPreprocessor
+from .preprocessor import preprocessors, apply_preprocessor
 from .advanced import comfy_load_controlnet
-
-
-control_net_preprocessors["tile"] = (DummyPreprocessor, [])
 
 
 def load_controlnet(control_net_name, control_net_override="None", timestep_keyframe=None):
@@ -20,42 +17,15 @@ def load_controlnet(control_net_name, control_net_override="None", timestep_keyf
     if control_net_name == "None":
         return None
 
-    controlnet_path = folder_paths.get_full_path("controlnet", control_net_name)
-    return comfy_load_controlnet(controlnet_path, timestep_keyframe=timestep_keyframe)
-
-
-def apply_preprocessor(image, preprocessor, resolution=512):
-    if preprocessor == "None":
-        return image
-
-    if preprocessor not in control_net_preprocessors:
-        raise Exception(f"Preprocessor {preprocessor} is not implemented")
-
-    preprocessor_class, default_args = control_net_preprocessors[preprocessor]
-    default_args: List = default_args.copy()
-
-    required_args = preprocessor_class.INPUT_TYPES()["required"].keys()
-    optional_args = preprocessor_class.INPUT_TYPES().get("optional", {}).keys()
-    resolution_idx = list(optional_args).index("resolution")
-    default_args.insert(resolution_idx, resolution)
-    default_args.insert(0, image)
-
-    preprocessor_args = {key: default_args[i] for i, key in enumerate(required_args)}
-    preprocessor_args.update({key: default_args[i + len(required_args)] for i, key in enumerate(optional_args)})
-
-    function_name = preprocessor_class.FUNCTION
-    res = getattr(preprocessor_class(), function_name)(**preprocessor_args)
-    if isinstance(res, dict):
-        res = res["result"]
-
-    return res[0]
+    return comfy_load_controlnet(control_net_name, timestep_keyframe=timestep_keyframe)
 
 
 def detect_controlnet(preprocessor: str, sd_version: str):
     controlnets = folder_paths.get_filename_list("controlnet")
     controlnets = filter(lambda x: sd_version in x, controlnets)
     if sd_version == "sdxl":
-        controlnets = filter(lambda x: "sdxl_t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "t2i" not in x, controlnets)
+        controlnets = filter(lambda x: "lllite" not in x, controlnets)
 
     control_net_name = "None"
     if preprocessor in {"canny", "scribble", "mlsd"}:
@@ -103,15 +73,13 @@ class AVControlNetLoader(ControlNetLoader):
 
 
 class AV_ControlNetPreprocessor:
-    preprocessors = list(control_net_preprocessors.keys())
-
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "preprocessor": (["None", "tile"] + s.preprocessors,),
-                "sd_version": (["sd15", "sdxl", "sdxl_t2i"],),
+                "preprocessor": (["None"] + preprocessors,),
+                "sd_version": (["sd15", "sdxl"],),
             },
             "optional": {
                 "resolution": ("INT", {"default": 512, "min": 64, "max": 2048, "step": 64}),
@@ -123,10 +91,11 @@ class AV_ControlNetPreprocessor:
     RETURN_NAMES = ("IMAGE", "CNET_NAME")
     FUNCTION = "detect_controlnet"
     CATEGORY = "Art Venture/Loaders"
+    DESCRIPTION = "DEPRECATED: Use comfyui_controlnet_aux's AIO Preprocessor instead"
 
     def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override="None"):
         if preprocessor_override != "None":
-            if preprocessor_override not in control_net_preprocessors:
+            if preprocessor_override not in preprocessors:
                 print(
                     f"Warning: Not found ControlNet preprocessor {preprocessor_override}. Use {preprocessor} instead."
                 )
@@ -141,7 +110,6 @@ class AV_ControlNetPreprocessor:
 
 class AVControlNetEfficientStacker:
     controlnets = folder_paths.get_filename_list("controlnet")
-    preprocessors = list(control_net_preprocessors.keys())
 
     @classmethod
     def INPUT_TYPES(s):
@@ -155,7 +123,7 @@ class AVControlNetEfficientStacker:
                 ),
                 "start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
                 "end_percent": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
-                "preprocessor": (["None"] + s.preprocessors,),
+                "preprocessor": (["None"] + preprocessors,),
             },
             "optional": {
                 "cnet_stack": ("CONTROL_NET_STACK",),
@@ -219,7 +187,7 @@ class AVControlNetEfficientStackerSimple(AVControlNetEfficientStacker):
                     "FLOAT",
                     {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01},
                 ),
-                "preprocessor": (["None"] + s.preprocessors,),
+                "preprocessor": (["None"] + preprocessors,),
             },
             "optional": {
                 "cnet_stack": ("CONTROL_NET_STACK",),
@@ -242,7 +210,6 @@ class AVControlNetEfficientStackerSimple(AVControlNetEfficientStacker):
 
 class AVControlNetEfficientLoader(ControlNetApply):
     controlnets = folder_paths.get_filename_list("controlnet")
-    preprocessors = list(control_net_preprocessors.keys())
 
     @classmethod
     def INPUT_TYPES(s):
@@ -255,7 +222,7 @@ class AVControlNetEfficientLoader(ControlNetApply):
                     "FLOAT",
                     {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01},
                 ),
-                "preprocessor": (["None"] + s.preprocessors,),
+                "preprocessor": (["None"] + preprocessors,),
             },
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
@@ -295,7 +262,6 @@ class AVControlNetEfficientLoader(ControlNetApply):
 
 class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
     controlnets = folder_paths.get_filename_list("controlnet")
-    preprocessors = list(control_net_preprocessors.keys())
 
     @classmethod
     def INPUT_TYPES(s):
@@ -311,7 +277,7 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
                 ),
                 "start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.001}),
                 "end_percent": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.001}),
-                "preprocessor": (["None"] + s.preprocessors,),
+                "preprocessor": (["None"] + preprocessors,),
             },
             "optional": {
                 "control_net_override": ("STRING", {"default": "None"}),
@@ -368,5 +334,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetEfficientLoaderAdvanced": "ControlNet Loader Adv.",
     "AV_ControlNetEfficientStacker": "ControlNet Stacker Adv.",
     "AV_ControlNetEfficientStackerSimple": "ControlNet Stacker",
-    "AV_ControlNetPreprocessor": "ControlNet Preprocessor",
+    "AV_ControlNetPreprocessor": "[Deprecated] ControlNet Preprocessor",
 }

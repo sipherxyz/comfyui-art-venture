@@ -1,14 +1,14 @@
 import os
+import io
 import sys
-import time
 import torch
+import base64
 import numpy as np
-import requests
-import traceback
 import importlib
+import importlib.metadata
 import subprocess
-import torch.nn.functional as F
-from typing import Callable
+from packaging import version
+from packaging.specifiers import SpecifierSet
 from PIL import Image
 
 from .logger import logger
@@ -22,38 +22,54 @@ class AnyType(str):
 any_type = AnyType("*")
 
 
-def ensure_package(package, install_package_name=None):
+def ensure_package(package, required_version=None, install_package_name=None):
     # Try to import the package
     try:
-        importlib.import_module(package)
+        module = importlib.import_module(package)
     except ImportError:
         logger.info(f"Package {package} is not installed. Installing now...")
-
-        if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
-            pip_install = [sys.executable, "-s", "-m", "pip", "install"]
-        else:
-            pip_install = [sys.executable, "-m", "pip", "install"]
-
-        subprocess.check_call(pip_install + [install_package_name or package])
+        install_command = _construct_pip_command(install_package_name or package, required_version)
+        subprocess.check_call(install_command)
     else:
-        print(f"Package {package} is already installed.")
+        # If a specific version is required, check the version
+        if required_version:
+            try:
+                installed_version = importlib.metadata.version(package)
+                
+                # Parse version specifier (e.g., ">=1.1.1", "==1.1.1", "<=1.1.1")
+                if any(op in required_version for op in ['>=', '<=', '==', '!=', '>', '<', '~=']):
+                    spec = SpecifierSet(required_version)
+                    if installed_version not in spec:
+                        logger.info(
+                            f"Package {package} version constraint not satisfied (installed: {installed_version}, required: {required_version}). Installing now..."
+                        )
+                        install_command = _construct_pip_command(install_package_name or package, required_version)
+                        subprocess.check_call(install_command)
+                else:
+                    # Fallback to simple version comparison for backwards compatibility
+                    if version.parse(installed_version) < version.parse(required_version):
+                        logger.info(
+                            f"Package {package} is outdated (installed: {installed_version}, required: {required_version}). Upgrading now..."
+                        )
+                        install_command = _construct_pip_command(install_package_name or package, required_version)
+                        subprocess.check_call(install_command)
+            except importlib.metadata.PackageNotFoundError:
+                logger.info(f"Package {package} version information not found. Installing required version {required_version}...")
+                install_command = _construct_pip_command(install_package_name or package, required_version)
+                subprocess.check_call(install_command)
 
 
-# modified from https://stackoverflow.com/questions/22058048/hashing-a-file-in-python
-def calculate_file_hash(filename: str, hash_every_n: int = 1):
-    import hashlib
+def _construct_pip_command(package_name, version=None):
+    if "python_embeded" in sys.executable or "python_embedded" in sys.executable:
+        pip_install = [sys.executable, "-s", "-m", "pip", "install"]
+    else:
+        pip_install = [sys.executable, "-m", "pip", "install"]
 
-    h = hashlib.sha256()
-    b = bytearray(10 * 1024 * 1024)  # read 10 megabytes at a time
-    mv = memoryview(b)
-    with open(filename, "rb", buffering=0) as f:
-        i = 0
-        # don't hash entire file, only portions of it if requested
-        while n := f.readinto(mv):
-            if i % hash_every_n == 0:
-                h.update(mv[:n])
-            i += 1
-    return h.hexdigest()
+    # Include the version in the package name if specified
+    if version:
+        package_name = f"{package_name}=={version}"
+
+    return pip_install + [package_name]
 
 
 def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
@@ -61,7 +77,19 @@ def get_dict_attribute(dict_inst: dict, name_string: str, default=None):
     value = dict_inst
 
     for key in nested_keys:
-        value = value.get(key, None)
+        # Handle array indexing
+        if key.startswith("[") and key.endswith("]"):
+            try:
+                index = int(key[1:-1])
+                if not isinstance(value, (list, tuple)) or index >= len(value):
+                    return default
+                value = value[index]
+            except (ValueError, TypeError):
+                return default
+        else:
+            if not isinstance(value, dict):
+                return default
+            value = value.get(key, None)
 
         if value is None:
             return default
@@ -135,11 +163,10 @@ def load_module(module_path, module_name=None):
 
     if module_name is None:
         module_name = os.path.basename(module_path)
+        if os.path.isdir(module_path):
+            module_path = os.path.join(module_path, "__init__.py")
 
-    if os.path.isfile(module_path):
-        module_spec = importlib.util.spec_from_file_location(module_name, module_path)
-    else:
-        module_spec = importlib.util.spec_from_file_location(module_name, os.path.join(module_path, "__init__.py"))
+    module_spec = importlib.util.spec_from_file_location(module_name, module_path)
 
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
@@ -165,3 +192,10 @@ def tensor2pil(image: torch.Tensor, mode=None):
 
 def tensor2bytes(image: torch.Tensor) -> bytes:
     return tensor2pil(image).tobytes()
+
+
+def pil2base64(image: Image.Image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_str

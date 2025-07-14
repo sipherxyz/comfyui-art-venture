@@ -1,12 +1,6 @@
-import os
-import io
 import json
 import torch
 from typing import Dict
-
-from PIL import Image
-from PIL.PngImagePlugin import PngInfo
-import numpy as np
 
 import folder_paths
 import comfy.sd
@@ -59,10 +53,14 @@ from .video import (
     NODE_CLASS_MAPPINGS as VIDEO_NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS as VIDEO_NODE_DISPLAY_NAME_MAPPINGS,
 )
-
-from .model_utils import load_file_from_url
-
-lora_cloud_front_url = "https://cdn.artventure.ai"
+from .impact import (
+    NODE_CLASS_MAPPINGS as IMPACT_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as IMPACT_NODE_DISPLAY_NAME_MAPPINGS,
+)
+from .llm import (
+    NODE_CLASS_MAPPINGS as LLM_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as LLM_NODE_DISPLAY_NAME_MAPPINGS,
+)
 
 
 class AVVAELoader(VAELoader):
@@ -116,14 +114,14 @@ class AVLoraListStacker:
             "required": {
                 "data": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
             },
-            "optional": {"base_url": ("STRING", {"default": lora_cloud_front_url}), "lora_stack": ("LORA_STACK",)},
+            "optional": {"lora_stack": ("LORA_STACK",)},
         }
 
     RETURN_TYPES = ("LORA_STACK",)
     FUNCTION = "load_list_lora"
     CATEGORY = "Art Venture/Loaders"
 
-    def parse_lora_list(self, data: str, base_url: str):
+    def parse_lora_list(self, data: str):
         # data is a list of lora model (lora_name, strength_model, strength_clip, url) in json format
         # trim data
         data = data.strip()
@@ -137,28 +135,26 @@ class AVLoraListStacker:
             return []
 
         available_loras = folder_paths.get_filename_list("loras")
-        model_path = os.path.join(folder_paths.models_dir, "loras")
 
         lora_params = []
         for lora in lora_list:
             lora_name = lora["name"]
             strength_model = lora["strength"]
             strength_clip = lora["strength"]
-            lora_url = lora.get("url", None)
 
             if strength_model == 0 and strength_clip == 0:
                 continue
 
             if lora_name not in available_loras:
-                lora_url = lora_url or f"{base_url}/models/loras/{lora_name}"
-                load_file_from_url(lora_url, model_dir=model_path, file_name=lora_name)
+                print(f"Not found lora {lora_name}, skipping")
+                continue
 
             lora_params.append((lora_name, strength_model, strength_clip))
 
         return lora_params
 
-    def load_list_lora(self, data, base_url=lora_cloud_front_url, lora_stack=None):
-        loras = self.parse_lora_list(data, base_url=base_url)
+    def load_list_lora(self, data, lora_stack=None):
+        loras = self.parse_lora_list(data)
 
         if lora_stack is not None:
             loras.extend([l for l in lora_stack if l[0] != "None"])
@@ -174,33 +170,25 @@ class AVLoraListLoader(AVLoraListStacker):
                 "model": ("MODEL",),
                 "clip": ("CLIP",),
                 "data": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
-            },
-            "optional": {"base_url": ("STRING", {"default": lora_cloud_front_url})},
+            }
         }
 
     RETURN_TYPES = ("MODEL", "CLIP")
 
-    def load_list_lora(self, model, clip, data, base_url=lora_cloud_front_url):
-        lora_params = self.parse_lora_list(data, base_url=base_url)
+    def load_list_lora(self, model, clip, data):
+        lora_params = self.parse_lora_list(data)
 
         if len(lora_params) == 0:
             return (model, clip)
 
-        def recursive_load_lora(lora_params, model, clip, id, folder_paths):
-            if len(lora_params) == 0:
-                return model, clip
+        def load_loras(lora_params, model, clip):
+            for lora_name, strength_model, strength_clip in lora_params:
+                lora_path = folder_paths.get_full_path("loras", lora_name)
+                lora_file = comfy.utils.load_torch_file(lora_path)
+                model, clip = comfy.sd.load_lora_for_models(model, clip, lora_file, strength_model, strength_clip)
+            return model, clip
 
-            lora_name, strength_model, strength_clip = lora_params[0]
-
-            lora_path = folder_paths.get_full_path("loras", lora_name)
-            lora_model, lora_clip = comfy.sd.load_lora_for_models(
-                model, clip, comfy.utils.load_torch_file(lora_path), strength_model, strength_clip
-            )
-
-            # Call the function again with the new lora_model and lora_clip and the remaining tuples
-            return recursive_load_lora(lora_params[1:], lora_model, lora_clip, id, folder_paths)
-
-        lora_model, lora_clip = recursive_load_lora(lora_params, model, clip, id, folder_paths)
+        lora_model, lora_clip = load_loras(lora_params, model, clip)
 
         return (lora_model, lora_clip)
 
@@ -384,7 +372,6 @@ class AVCheckpointMerge:
                 "model1": ("MODEL",),
                 "model2": ("MODEL",),
                 "model1_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "model2_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
             }
         }
 
@@ -392,15 +379,16 @@ class AVCheckpointMerge:
     FUNCTION = "merge"
 
     CATEGORY = "Art Venture/Model Merging"
+    DESCRIPTION = "DEPRECATED: Use ComfyUI's native ModelMergeSimple instead"
 
-    def merge(self, model1, model2, model1_weight, model2_weight):
+    def merge(self, model1, model2, model1_weight):
         m = model1.clone()
         k1 = model1.get_key_patches("diffusion_model.")
         k2 = model2.get_key_patches("diffusion_model.")
-        for k in k1:
-            if k in k2:
-                a = k1[k][0]
-                b = k2[k][0]
+        for k in k2:
+            if k in k1:
+                a, _ = k1[k][0]
+                b, _ = k2[k][0]
 
                 if a.shape != b.shape and a.shape[0:1] + a.shape[2:] == b.shape[0:1] + b.shape[2:]:
                     if a.shape[1] == 4 and b.shape[1] == 9:
@@ -412,14 +400,7 @@ class AVCheckpointMerge:
                             "When merging instruct-pix2pix model with a normal one, model1 must be the instruct-pix2pix model."
                         )
 
-                    c = torch.zeros_like(a)
-                    c[:, 0:4, :, :] = b
-                    b = c
-
-                m.add_patches({k: (b,)}, model2_weight, model1_weight)
-            else:
-                logger.warn(f"Key {k} not found in model2")
-                m.add_patches({k: k1[k]}, -1.0, 1.0)  # zero out
+                m.add_patches({k: k2[k]}, 1 - model1_weight, model1_weight)
 
         return (m,)
 
@@ -474,7 +455,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_LoraLoader": "Lora Loader",
     "AV_LoraListLoader": "Lora List Loader",
     "AV_LoraListStacker": "Lora List Stacker",
-    "AV_CheckpointMerge": "Checkpoint Merge",
+    "AV_CheckpointMerge": "[Deprecated] Checkpoint Merge",
     "AV_CheckpointSave": "Checkpoint Save",
 }
 
@@ -511,3 +492,9 @@ NODE_DISPLAY_NAME_MAPPINGS.update(INPAINT_NODE_DISPLAY_NAME_MAPPINGS)
 
 NODE_CLASS_MAPPINGS.update(VIDEO_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(VIDEO_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(IMPACT_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(IMPACT_NODE_DISPLAY_NAME_MAPPINGS)
+
+NODE_CLASS_MAPPINGS.update(LLM_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(LLM_NODE_DISPLAY_NAME_MAPPINGS)

@@ -5,7 +5,7 @@ import torch
 import base64
 import random
 import requests
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 from PIL import Image, ImageOps, ImageFilter
 import numpy as np
@@ -18,6 +18,42 @@ from .utils import pil2tensor, tensor2pil, ensure_package, get_dict_attribute
 
 
 MAX_RESOLUTION = 8192
+
+
+class AnyType(str):
+    """A special class that is always equal in not equal comparisons. Credit to pythongosssss"""
+
+    def __ne__(self, __value: object) -> bool:
+        return False
+
+
+class FlexibleOptionalInputType(dict):
+    """A special class to make flexible nodes that pass data to our python handlers.
+
+    Enables both flexible/dynamic input types (like for Any Switch) or a dynamic number of inputs
+    (like for Any Switch, Context Switch, Context Merge, Power Lora Loader, etc).
+
+    Note, for ComfyUI, all that's needed is the `__contains__` override below, which tells ComfyUI
+    that our node will handle the input, regardless of what it is.
+
+    However, with https://github.com/comfyanonymous/ComfyUI/pull/2666 a large change would occur
+    requiring more details on the input itself. There, we need to return a list/tuple where the first
+    item is the type. This can be a real type, or use the AnyType for additional flexibility.
+
+    This should be forwards compatible unless more changes occur in the PR.
+    """
+
+    def __init__(self, type):
+        self.type = type
+
+    def __getitem__(self, key):
+        return (self.type,)
+
+    def __contains__(self, key):
+        return True
+
+
+any_type = AnyType("*")
 
 
 def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
@@ -43,8 +79,8 @@ def prepare_image_for_preview(image: Image.Image, output_dir: str, prefix=None):
 
 
 def load_images_from_url(urls: List[str], keep_alpha_channel=False):
-    images = []
-    masks = []
+    images: List[Image.Image] = []
+    masks: List[Optional[Image.Image]] = []
 
     for url in urls:
         if url.startswith("data:image/"):
@@ -61,10 +97,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
                 raise Exception(response.text)
 
             i = Image.open(io.BytesIO(response.content))
-        elif url.startswith("/view?"):
+        elif url.startswith(("/view?", "/api/view?")):
             from urllib.parse import parse_qs
 
-            qs = parse_qs(url[6:])
+            qs_idx = url.find("?")
+            qs = parse_qs(url[qs_idx + 1 :])
             filename = qs.get("name", qs.get("filename", None))
             if filename is None:
                 raise Exception(f"Invalid url: {url}")
@@ -88,7 +125,11 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
         elif url == "":
             continue
         else:
-            raise Exception(f"Invalid url: {url}")
+            url = folder_paths.get_annotated_filepath(url)
+            if not os.path.isfile(url):
+                raise Exception(f"Invalid url: {url}")
+
+            i = Image.open(url)
 
         i = ImageOps.exif_transpose(i)
         has_alpha = "A" in i.getbands()
@@ -100,14 +141,8 @@ def load_images_from_url(urls: List[str], keep_alpha_channel=False):
         if has_alpha:
             mask = i.getchannel("A")
 
-            # recreate image to fix weird RGB image
-            alpha = i.split()[-1]
-            image = Image.new("RGB", i.size, (0, 0, 0))
-            image.paste(i, mask=alpha)
-            image.putalpha(alpha)
-
-            if not keep_alpha_channel:
-                image = image.convert("RGB")
+        if not keep_alpha_channel:
+            image = i.convert("RGB")
         else:
             image = i
 
@@ -123,10 +158,15 @@ class UtilLoadImageFromUrl:
         self.filename_prefix = "TempImageFromUrl"
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+                "image": ("STRING", {
+                    "default": "",
+                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                    "multiline": True,
+                    "dynamicPrompts": False,
+                }),
             },
             "optional": {
                 "keep_alpha_channel": (
@@ -146,91 +186,146 @@ class UtilLoadImageFromUrl:
     CATEGORY = "Art Venture/Image"
     FUNCTION = "load_image"
 
-    def load_image(self, url: str, keep_alpha_channel=False, output_mode=False):
-        urls = url.strip().split("\n")
-        images, masks = load_images_from_url(urls, keep_alpha_channel)
-        if len(images) == 0:
-            image = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
-            mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
-            return ([image], [mask], False)
+    def load_image(self, image: str, keep_alpha_channel=False, output_mode=False):
+        urls = image.strip().split("\n")
+        pil_images, pil_masks = load_images_from_url(urls, keep_alpha_channel)
+        has_image = len(pil_images) > 0
+        if not has_image:
+            i = torch.zeros((1, 64, 64, 3), dtype=torch.float32, device="cpu")
+            m = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+            pil_images = [tensor2pil(i)]
+            pil_masks = [tensor2pil(m, mode="L")]
 
         previews = []
-        np_images = []
-        np_masks = []
+        np_images: list[torch.Tensor] = []
+        np_masks: list[torch.Tensor] = []
 
-        for image, mask in zip(images, masks):
-            # save image to temp folder
-            preview = prepare_image_for_preview(image, self.output_dir, self.filename_prefix)
-            image = pil2tensor(image)
-
-            if mask:
-                mask = np.array(mask).astype(np.float32) / 255.0
-                mask = 1.0 - torch.from_numpy(mask)
+        for pil_image, pil_mask in zip(pil_images, pil_masks):
+            if pil_mask is not None:
+                preview_image = Image.new("RGB", pil_image.size)
+                preview_image.paste(pil_image, (0, 0))
+                preview_image.putalpha(pil_mask)
             else:
-                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+                preview_image = pil_image
 
-            previews.append(preview)
-            np_images.append(image)
-            np_masks.append(mask.unsqueeze(0))
+            previews.append(prepare_image_for_preview(preview_image, self.output_dir, self.filename_prefix))
+
+            np_image = pil2tensor(pil_image)
+            if pil_mask:
+                np_mask = np.array(pil_mask).astype(np.float32) / 255.0
+                np_mask = 1.0 - torch.from_numpy(np_mask)
+            else:
+                np_mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
+
+            np_images.append(np_image)
+            np_masks.append(np_mask.unsqueeze(0))
 
         if output_mode:
-            result = (np_images, np_masks, True)
+            result = (np_images, np_masks, has_image)
         else:
             has_size_mismatch = False
             if len(np_images) > 1:
-                for image in np_images[1:]:
-                    if image.shape[1] != np_images[0].shape[1] or image.shape[2] != np_images[0].shape[2]:
+                for np_image in np_images[1:]:
+                    if np_image.shape[1] != np_images[0].shape[1] or np_image.shape[2] != np_images[0].shape[2]:
                         has_size_mismatch = True
                         break
 
             if has_size_mismatch:
                 raise Exception("To output as batch, images must have the same size. Use list output mode instead.")
 
-            result = ([torch.cat(np_images)], [torch.cat(np_masks)], True)
+            result = ([torch.cat(np_images)], [torch.cat(np_masks)], has_image)
 
         return {"ui": {"images": previews}, "result": result}
 
 
 class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
-                "url": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
+                "image": ("STRING", {
+                    "default": "",
+                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                    "multiline": True,
+                    "dynamicPrompts": False,
+                }),
                 "channel": (["alpha", "red", "green", "blue"],),
-            }
+            },
+            "optional": {
+                "output_mode": (
+                    "BOOLEAN",
+                    {"default": False, "label_on": "list", "label_off": "batch"},
+                ),
+            },
         }
 
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("masks",)
+    OUTPUT_IS_LIST = (True,)
 
-    def load_image(self, url: str, channel: str):
-        urls = url.strip().split("\n")
-        images, alphas = load_images_from_url([urls], False)
+    def load_image(self, image: str, channel: str, output_mode=False, url=""):
+        if not image or image == "":
+            image = url
 
-        masks = []
+        urls = image.strip().split("\n")
+        pil_images, pil_alphas = load_images_from_url(urls, True)
 
-        for image, alpha in zip(images, alphas):
+        masks: List[torch.Tensor] = []
+
+        for img, alpha in zip(pil_images, pil_alphas):
             if channel == "alpha":
                 mask = alpha
             elif channel == "red":
-                mask = image.getchannel("R")
+                mask = img.getchannel("R")
             elif channel == "green":
-                mask = image.getchannel("G")
+                mask = img.getchannel("G")
             elif channel == "blue":
-                mask = image.getchannel("B")
+                mask = img.getchannel("B")
 
-            mask = np.array(mask).astype(np.float32) / 255.0
-            mask = 1.0 - torch.from_numpy(mask)
+            if mask:
+                mask = np.array(mask, dtype=np.float32) / 255.0
+                mask = torch.from_numpy(mask)
+                if channel == "alpha":
+                    mask = 1.0 - mask
+            else:
+                mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
 
-            masks.append(mask)
+            masks.append(mask.unsqueeze(0))
 
-        return (torch.stack(masks, dim=0),)
+        if output_mode:
+            return (masks,)
+
+        if len(masks) > 1:
+            for mask in masks[1:]:
+                if mask.shape[0] != masks[0].shape[0] or mask.shape[1] != masks[0].shape[1]:
+                    raise Exception("To output as batch, masks must have the same size. Use list output mode instead.")
+
+        return ([torch.cat(masks)],)
+
+
+class UtilLoadJsonFromText:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "data": (
+                    "STRING",
+                    {"multiline": True, "dynamicPrompts": False, "placeholder": "JSON object. Eg: {'key': 'value'}"},
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("JSON",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "load_json"
+
+    def load_json(self, data: str):
+        return (json.loads(data),)
 
 
 class UtilLoadJsonFromUrl:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "url": ("STRING", {"default": ""}),
@@ -258,7 +353,7 @@ class UtilLoadJsonFromUrl:
 
 class UtilGetObjectFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -277,7 +372,7 @@ class UtilGetObjectFromJson:
 
 class UtilGetTextFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -291,12 +386,12 @@ class UtilGetTextFromJson:
     OUTPUT_NODE = True
 
     def get_string_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, ""),)
+        return (str(get_dict_attribute(json, key, "")),)
 
 
 class UtilGetFloatFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -310,12 +405,12 @@ class UtilGetFloatFromJson:
     OUTPUT_NODE = True
 
     def get_float_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, 0.0),)
+        return (float(get_dict_attribute(json, key, 0.0)),)
 
 
 class UtilGetIntFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -329,12 +424,12 @@ class UtilGetIntFromJson:
     OUTPUT_NODE = True
 
     def get_int_from_json(self, json: Dict, key: str):
-        return (get_dict_attribute(json, key, 0),)
+        return (int(get_dict_attribute(json, key, 0)),)
 
 
 class UtilGetBoolFromJson:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "json": ("JSON",),
@@ -353,7 +448,7 @@ class UtilGetBoolFromJson:
 
 class UtilRandomInt:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -366,7 +461,7 @@ class UtilRandomInt:
     FUNCTION = "random_int"
 
     @classmethod
-    def IS_CHANGED(s, *args, **kwargs):
+    def IS_CHANGED(cls, *args, **kwargs):
         return torch.rand(1).item()
 
     def random_int(self, min: int, max: int):
@@ -376,7 +471,7 @@ class UtilRandomInt:
 
 class UtilRandomFloat:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -389,7 +484,7 @@ class UtilRandomFloat:
     FUNCTION = "random_float"
 
     @classmethod
-    def IS_CHANGED(s, *args, **kwargs):
+    def IS_CHANGED(cls, *args, **kwargs):
         return torch.rand(1).item()
 
     def random_float(self, min: float, max: float):
@@ -399,7 +494,7 @@ class UtilRandomFloat:
 
 class UtilStringToInt:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {"string": ("STRING", {"default": "0"})},
         }
@@ -414,7 +509,7 @@ class UtilStringToInt:
 
 class UtilStringToNumber:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "string": ("STRING", {"default": "0"}),
@@ -439,7 +534,7 @@ class UtilStringToNumber:
 
 class UtilNumberScaler:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "min": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 0xFFFFFFFFFFFFFFFF}),
@@ -461,7 +556,7 @@ class UtilNumberScaler:
 
 class UtilBooleanPrimitive:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "value": ("BOOLEAN", {"default": False}),
@@ -480,9 +575,58 @@ class UtilBooleanPrimitive:
         return (value, str(value))
 
 
+class UtilTextSwitchCase:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "switch_cases": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                        "placeholder": "case_1:output_1\ncase_2:output_2\nthat span multiple lines\ncase_3:output_3",
+                    },
+                ),
+                "condition": ("STRING", {"default": ""}),
+                "default_value": ("STRING", {"default": ""}),
+                "delimiter": ("STRING", {"default": ":"}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "text_switch_case"
+
+    def text_switch_case(self, switch_cases: str, condition: str, default_value: str, delimiter: str = ":"):
+        # Split into cases first
+        cases = switch_cases.split("\n")
+        current_case = None
+        current_output = []
+
+        for line in cases:
+            if delimiter in line:
+                # Process previous case if exists
+                if current_case is not None and condition == current_case:
+                    return ("\n".join(current_output),)
+
+                # Start new case
+                current_case, output = line.split(delimiter, 1)
+                current_output = [output]
+            elif current_case is not None:
+                current_output.append(line)
+
+        # Check last case
+        if current_case is not None and condition == current_case:
+            return ("\n".join(current_output),)
+
+        return (default_value,)
+
+
 class UtilImageMuxer:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image_1": ("IMAGE",),
@@ -503,7 +647,7 @@ class UtilImageMuxer:
 
 class UtilSDXLAspectRatioSelector:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "aspect_ratio": (
@@ -566,7 +710,7 @@ class UtilSDXLAspectRatioSelector:
 
 class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "aspect_ratio": (
@@ -596,7 +740,7 @@ class UtilAspectRatioSelector(UtilSDXLAspectRatioSelector):
 
 class UtilDependenciesEdit:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "dependencies": ("DEPENDENCIES",),
@@ -685,7 +829,7 @@ class UtilImageScaleDown:
     crop_methods = ["disabled", "center"]
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -697,7 +841,7 @@ class UtilImageScaleDown:
                     "INT",
                     {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1},
                 ),
-                "crop": (s.crop_methods,),
+                "crop": (cls.crop_methods,),
             }
         }
 
@@ -724,7 +868,7 @@ class UtilImageScaleDown:
         results = []
         for image in s:
             img = tensor2pil(image).convert("RGB")
-            img = img.resize((width, height), Image.LANCZOS)
+            img = img.resize((width, height), Image.Resampling.LANCZOS)
             results.append(pil2tensor(img))
 
         return (torch.cat(results, dim=0),)
@@ -732,7 +876,7 @@ class UtilImageScaleDown:
 
 class UtilImageScaleDownBy(UtilImageScaleDown):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -757,7 +901,7 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
 
 class UtilImageScaleDownToSize(UtilImageScaleDownBy):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -785,7 +929,7 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
 
 class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -826,7 +970,7 @@ class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
 
 class UtilImageAlphaComposite:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image_1": ("IMAGE",),
@@ -858,7 +1002,7 @@ class UtilImageAlphaComposite:
 
 class UtilImageGaussianBlur:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -882,7 +1026,7 @@ class UtilImageGaussianBlur:
 
 class UtilImageExtractChannel:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -912,7 +1056,7 @@ class UtilImageExtractChannel:
 
 class UtilImageApplyChannel:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -967,17 +1111,17 @@ class UtillQRCodeGenerator:
     CATEGORY = "Art Venture/Utils"
 
     def create_qr_code(self, text, size, qr_version, error_correction, box_size, border):
-        ensure_package("qrcode", "qrcode[pil]")
+        ensure_package("qrcode", install_package_name="qrcode[pil]")
         import qrcode
 
         if error_correction == "L":
-            error_level = qrcode.constants.ERROR_CORRECT_L
+            error_level = qrcode.ERROR_CORRECT_L
         elif error_correction == "M":
-            error_level = qrcode.constants.ERROR_CORRECT_M
+            error_level = qrcode.ERROR_CORRECT_M
         elif error_correction == "Q":
-            error_level = qrcode.constants.ERROR_CORRECT_Q
+            error_level = qrcode.ERROR_CORRECT_Q
         else:
-            error_level = qrcode.constants.ERROR_CORRECT_H
+            error_level = qrcode.ERROR_CORRECT_H
 
         qr = qrcode.QRCode(version=qr_version, error_correction=error_level, box_size=box_size, border=border)
         qr.add_data(text)
@@ -990,7 +1134,7 @@ class UtillQRCodeGenerator:
 
 class UtilRepeatImages:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "images": ("IMAGE",),
@@ -1008,7 +1152,7 @@ class UtilRepeatImages:
 
 class UtilSeedSelector:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "mode": ("BOOLEAN", {"default": True, "label_on": "random", "label_off": "fixed"}),
@@ -1029,9 +1173,31 @@ class UtilSeedSelector:
         return (fixed_seed if not mode else seed,)
 
 
+class UtilCheckpointSelector:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "ckpt_name": (folder_paths.get_filename_list("checkpoints"),),
+            }
+        }
+
+    RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING")
+    RETURN_NAMES = ("ckpt_name", "ckpt_name_str")
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "get_ckpt_name"
+
+    @classmethod
+    def IS_CHANGED(cls, *args, **kwargs):
+        return torch.rand(1).item()
+
+    def get_ckpt_name(self, ckpt_name):
+        return (ckpt_name, ckpt_name)
+
+
 class UtilModelMerge:
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "model1": ("MODEL",),
@@ -1061,6 +1227,32 @@ class UtilModelMerge:
         return (m,)
 
 
+class UtilTextRandomMultiline:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"multiline": True, "dynamicPrompts": False}),
+                "amount": ("INT", {"default": 1, "min": 1, "max": 1024}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("lines",)
+    OUTPUT_IS_LIST = (True,)
+    CATEGORY = "Art Venture/Utils"
+    FUNCTION = "random_multiline"
+
+    def random_multiline(self, text: str, amount=1, seed=0):
+        lines = text.strip().split("\n")
+        lines = [line.strip() for line in lines if line.strip()]
+
+        custom_random = random.Random(seed)
+        custom_random.shuffle(lines)
+        return (lines[:amount],)
+
+
 NODE_CLASS_MAPPINGS = {
     "LoadImageFromUrl": UtilLoadImageFromUrl,
     "LoadImageAsMaskFromUrl": UtilLoadImageAsMaskFromUrl,
@@ -1082,7 +1274,9 @@ NODE_CLASS_MAPPINGS = {
     "AspectRatioSelector": UtilAspectRatioSelector,
     "SDXLAspectRatioSelector": UtilSDXLAspectRatioSelector,
     "SeedSelector": UtilSeedSelector,
+    "CheckpointNameSelector": UtilCheckpointSelector,
     "LoadJsonFromUrl": UtilLoadJsonFromUrl,
+    "LoadJsonFromText": UtilLoadJsonFromText,
     "GetObjectFromJson": UtilGetObjectFromJson,
     "GetTextFromJson": UtilGetTextFromJson,
     "GetFloatFromJson": UtilGetFloatFromJson,
@@ -1092,6 +1286,8 @@ NODE_CLASS_MAPPINGS = {
     "RandomFloat": UtilRandomFloat,
     "NumberScaler": UtilNumberScaler,
     "MergeModels": UtilModelMerge,
+    "TextRandomMultiline": UtilTextRandomMultiline,
+    "TextSwitchCase": UtilTextSwitchCase,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadImageFromUrl": "Load Image From URL",
@@ -1114,7 +1310,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AspectRatioSelector": "Aspect Ratio",
     "SDXLAspectRatioSelector": "SDXL Aspect Ratio",
     "SeedSelector": "Seed Selector",
+    "CheckpointNameSelector": "Checkpoint Name Selector",
     "LoadJsonFromUrl": "Load JSON From URL",
+    "LoadJsonFromText": "Load JSON From Text",
     "GetObjectFromJson": "Get Object From JSON",
     "GetTextFromJson": "Get Text From JSON",
     "GetFloatFromJson": "Get Float From JSON",
@@ -1124,4 +1322,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RandomFloat": "Random Float",
     "NumberScaler": "Number Scaler",
     "MergeModels": "Merge Models",
+    "TextRandomMultiline": "Text Random Multiline",
+    "TextSwitchCase": "Text Switch Case",
 }

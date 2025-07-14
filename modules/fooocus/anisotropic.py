@@ -1,4 +1,5 @@
 import torch
+from typing import Union, Optional
 
 
 Tensor = torch.Tensor
@@ -7,12 +8,12 @@ Dtype = torch.Type
 pad = torch.nn.functional.pad
 
 
-def _compute_zero_padding(kernel_size: tuple[int, int] | int) -> tuple[int, int]:
+def _compute_zero_padding(kernel_size: Union[tuple[int, int], int]) -> tuple[int, int]:
     ky, kx = _unpack_2d_ks(kernel_size)
     return (ky - 1) // 2, (kx - 1) // 2
 
 
-def _unpack_2d_ks(kernel_size: tuple[int, int] | int) -> tuple[int, int]:
+def _unpack_2d_ks(kernel_size: Union[tuple[int, int], int]) -> tuple[int, int]:
     if isinstance(kernel_size, int):
         ky = kx = kernel_size
     else:
@@ -26,17 +27,14 @@ def _unpack_2d_ks(kernel_size: tuple[int, int] | int) -> tuple[int, int]:
 
 def gaussian(
     window_size: int,
-    sigma: Tensor | float,
+    sigma: Union[Tensor, float],
     *,
-    device: Device | None = None,
-    dtype: Dtype | None = None,
+    device: Optional[Device] = None,
+    dtype: Optional[Dtype] = None,
 ) -> Tensor:
     batch_size = sigma.shape[0]
 
-    x = (
-        torch.arange(window_size, device=sigma.device, dtype=sigma.dtype)
-        - window_size // 2
-    ).expand(batch_size, -1)
+    x = (torch.arange(window_size, device=sigma.device, dtype=sigma.dtype) - window_size // 2).expand(batch_size, -1)
 
     if window_size % 2 == 0:
         x = x + 0.5
@@ -48,68 +46,58 @@ def gaussian(
 
 def get_gaussian_kernel1d(
     kernel_size: int,
-    sigma: float | Tensor,
+    sigma: Union[float, Tensor],
     force_even: bool = False,
     *,
-    device: Device | None = None,
-    dtype: Dtype | None = None,
+    device: Optional[Device] = None,
+    dtype: Optional[Dtype] = None,
 ) -> Tensor:
     return gaussian(kernel_size, sigma, device=device, dtype=dtype)
 
 
 def get_gaussian_kernel2d(
-    kernel_size: tuple[int, int] | int,
-    sigma: tuple[float, float] | Tensor,
+    kernel_size: Union[tuple[int, int], int],
+    sigma: Union[tuple[float, float], Tensor],
     force_even: bool = False,
     *,
-    device: Device | None = None,
-    dtype: Dtype | None = None,
+    device: Optional[Device] = None,
+    dtype: Optional[Dtype] = None,
 ) -> Tensor:
     sigma = torch.Tensor([[sigma, sigma]]).to(device=device, dtype=dtype)
 
     ksize_y, ksize_x = _unpack_2d_ks(kernel_size)
     sigma_y, sigma_x = sigma[:, 0, None], sigma[:, 1, None]
 
-    kernel_y = get_gaussian_kernel1d(
-        ksize_y, sigma_y, force_even, device=device, dtype=dtype
-    )[..., None]
-    kernel_x = get_gaussian_kernel1d(
-        ksize_x, sigma_x, force_even, device=device, dtype=dtype
-    )[..., None]
+    kernel_y = get_gaussian_kernel1d(ksize_y, sigma_y, force_even, device=device, dtype=dtype)[..., None]
+    kernel_x = get_gaussian_kernel1d(ksize_x, sigma_x, force_even, device=device, dtype=dtype)[..., None]
 
     return kernel_y * kernel_x.view(-1, 1, ksize_x)
 
 
 def _bilateral_blur(
     input: Tensor,
-    guidance: Tensor | None,
-    kernel_size: tuple[int, int] | int,
-    sigma_color: float | Tensor,
-    sigma_space: tuple[float, float] | Tensor,
+    guidance: Union[Tensor, None],
+    kernel_size: Union[tuple[int, int], int],
+    sigma_color: Union[float, Tensor],
+    sigma_space: Union[tuple[float, float], Tensor],
     border_type: str = "reflect",
     color_distance_type: str = "l1",
 ) -> Tensor:
     if isinstance(sigma_color, Tensor):
-        sigma_color = sigma_color.to(device=input.device, dtype=input.dtype).view(
-            -1, 1, 1, 1, 1
-        )
+        sigma_color = sigma_color.to(device=input.device, dtype=input.dtype).view(-1, 1, 1, 1, 1)
 
     ky, kx = _unpack_2d_ks(kernel_size)
     pad_y, pad_x = _compute_zero_padding(kernel_size)
 
     padded_input = pad(input, (pad_x, pad_x, pad_y, pad_y), mode=border_type)
-    unfolded_input = (
-        padded_input.unfold(2, ky, 1).unfold(3, kx, 1).flatten(-2)
-    )  # (B, C, H, W, Ky x Kx)
+    unfolded_input = padded_input.unfold(2, ky, 1).unfold(3, kx, 1).flatten(-2)  # (B, C, H, W, Ky x Kx)
 
     if guidance is None:
         guidance = input
         unfolded_guidance = unfolded_input
     else:
         padded_guidance = pad(guidance, (pad_x, pad_x, pad_y, pad_y), mode=border_type)
-        unfolded_guidance = (
-            padded_guidance.unfold(2, ky, 1).unfold(3, kx, 1).flatten(-2)
-        )  # (B, C, H, W, Ky x Kx)
+        unfolded_guidance = padded_guidance.unfold(2, ky, 1).unfold(3, kx, 1).flatten(-2)  # (B, C, H, W, Ky x Kx)
 
     diff = unfolded_guidance - guidance.unsqueeze(-1)
     if color_distance_type == "l1":
@@ -118,13 +106,9 @@ def _bilateral_blur(
         color_distance_sq = diff.square().sum(1, keepdim=True)
     else:
         raise ValueError("color_distance_type only acceps l1 or l2")
-    color_kernel = (
-        -0.5 / sigma_color**2 * color_distance_sq
-    ).exp()  # (B, 1, H, W, Ky x Kx)
+    color_kernel = (-0.5 / sigma_color**2 * color_distance_sq).exp()  # (B, 1, H, W, Ky x Kx)
 
-    space_kernel = get_gaussian_kernel2d(
-        kernel_size, sigma_space, device=input.device, dtype=input.dtype
-    )
+    space_kernel = get_gaussian_kernel2d(kernel_size, sigma_space, device=input.device, dtype=input.dtype)
     space_kernel = space_kernel.view(-1, 1, 1, 1, kx * ky)
 
     kernel = space_kernel * color_kernel
@@ -134,9 +118,9 @@ def _bilateral_blur(
 
 def bilateral_blur(
     input: Tensor,
-    kernel_size: tuple[int, int] | int = (13, 13),
-    sigma_color: float | Tensor = 3.0,
-    sigma_space: tuple[float, float] | Tensor = 3.0,
+    kernel_size: Union[tuple[int, int], int] = (13, 13),
+    sigma_color: Union[float, Tensor] = 3.0,
+    sigma_space: Union[tuple[float, float], Tensor] = 3.0,
     border_type: str = "reflect",
     color_distance_type: str = "l1",
 ) -> Tensor:
@@ -154,9 +138,9 @@ def bilateral_blur(
 def joint_bilateral_blur(
     input: Tensor,
     guidance: Tensor,
-    kernel_size: tuple[int, int] | int,
-    sigma_color: float | Tensor,
-    sigma_space: tuple[float, float] | Tensor,
+    kernel_size: Union[tuple[int, int], int],
+    sigma_color: Union[float, Tensor],
+    sigma_space: Union[tuple[float, float], Tensor],
     border_type: str = "reflect",
     color_distance_type: str = "l1",
 ) -> Tensor:
@@ -174,9 +158,9 @@ def joint_bilateral_blur(
 class _BilateralBlur(torch.nn.Module):
     def __init__(
         self,
-        kernel_size: tuple[int, int] | int,
-        sigma_color: float | Tensor,
-        sigma_space: tuple[float, float] | Tensor,
+        kernel_size: Union[tuple[int, int], int],
+        sigma_color: Union[float, Tensor],
+        sigma_space: Union[tuple[float, float], Tensor],
         border_type: str = "reflect",
         color_distance_type: str = "l1",
     ) -> None:

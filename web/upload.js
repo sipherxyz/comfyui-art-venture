@@ -1,7 +1,10 @@
-import { app, ANIM_PREVIEW_WIDGET } from '../../../scripts/app.js';
-import { api } from '../../../scripts/api.js';
-import { $el } from '../../../scripts/ui.js';
-import { createImageHost } from '../../../scripts/ui/imagePreview.js';
+import { app } from '../../scripts/app.js';
+import { api } from '../../scripts/api.js';
+import { $el } from '../../scripts/ui.js';
+import { addWidget, DOMWidgetImpl } from '../../scripts/domWidget.js';
+import { ComfyWidgets } from '../../scripts/widgets.js'
+
+import { chainCallback, addKVState, addWidgetChangeCallback } from './utils.js';
 
 const style = `
 .comfy-img-preview video {
@@ -11,566 +14,239 @@ const style = `
 }
 `;
 
-const URL_REGEX = /^(https?:\/\/|\/view\?|data:image\/)/;
+const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl'];
 
-const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl', 'LoadVideoFromUrl'];
+const formatUrl = (url) => {
+  if (!url) return ""
 
-function chainCallback(object, property, callback) {
-  if (object == undefined) {
-    //This should not happen.
-    console.error('Tried to add callback to non-existant object');
-    return;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) return url
+  if (url.startsWith("/view") || url.startsWith("/api/view")) return url
+
+  let type = "input"
+  if (url.endsWith(']')) {
+    const openBracketIndex = url.lastIndexOf('[')
+    type = url.slice(openBracketIndex + 1, url.length - 1).trim()
+    url = url.slice(0, openBracketIndex).trim()
   }
-  if (property in object) {
-    const callback_orig = object[property];
-    object[property] = function () {
-      const r = callback_orig.apply(this, arguments);
-      callback.apply(this, arguments);
-      return r;
-    };
-  } else {
-    object[property] = callback;
-  }
+
+  const parts = url.split('/')
+  const filename = parts.pop()
+  const subfolder = parts.join('/')
+
+  const params = [
+    'filename=' + encodeURIComponent(filename),
+    'type=' + type,
+    'subfolder=' + subfolder,
+    app.getRandParam().substring(1)
+  ].join('&')
+
+  return api.apiURL(`/view?${params}`)
 }
 
-function injectHidden(widget) {
-  widget.computeSize = (target_width) => {
-    if (widget.hidden) {
-      return [0, -4];
-    }
-    return [target_width, 20];
-  };
-  widget._type = widget.type;
-  Object.defineProperty(widget, 'type', {
-    set: function (value) {
-      widget._type = value;
-    },
-    get: function () {
-      if (widget.hidden) {
-        return 'hidden';
-      }
-      return widget._type;
-    },
-  });
-}
+// copied from ComfyUI_frontend/src/composables/widgets/useStringWidget.ts
+// remove the Object.defineProperty(widget, 'value') part
+function addUrlWidget(node, name, options) {
+  const inputEl = document.createElement('textarea')
+  inputEl.className = 'comfy-multiline-input'
+  inputEl.value = options.default
+  inputEl.placeholder = options.placeholder || name
+  inputEl.spellcheck = false
 
-function addKVState(nodeType) {
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    chainCallback(this, 'onConfigure', function (info) {
-      if (!this.widgets) {
-        //Node has no widgets, there is nothing to restore
-        return;
-      }
-      if (typeof info.widgets_values != 'object') {
-        //widgets_values is in some unknown inactionable format
-        return;
-      }
-      let widgetDict = info.widgets_values;
-      if (widgetDict.length == undefined) {
-        for (let w of this.widgets) {
-          if (w.name in widgetDict) {
-            w.value = widgetDict[w.name];
-          } else {
-            //attempt to restore default value
-            let inputs = LiteGraph.getNodeType(this.type).nodeData.input;
-            let initialValue = null;
-            if (inputs?.required?.hasOwnProperty(w.name)) {
-              if (inputs.required[w.name][1]?.hasOwnProperty('default')) {
-                initialValue = inputs.required[w.name][1].default;
-              } else if (inputs.required[w.name][0].length) {
-                initialValue = inputs.required[w.name][0][0];
-              }
-            } else if (inputs?.optional?.hasOwnProperty(w.name)) {
-              if (inputs.optional[w.name][1]?.hasOwnProperty('default')) {
-                initialValue = inputs.optional[w.name][1].default;
-              } else if (inputs.optional[w.name][0].length) {
-                initialValue = inputs.optional[w.name][0][0];
-              }
-            }
-            if (initialValue) {
-              w.value = initialValue;
-            }
-          }
-        }
-      } else {
-        //Saved data was not a map made by this method
-        //and a conversion dict for it does not exist
-        //It's likely an array and that has been blindly applied
-        if (info?.widgets_values?.length != this.widgets.length) {
-          //Widget could not have restored properly
-          //Note if multiple node loads fail, only the latest error dialog displays
-          app.ui.dialog.show(
-            'Failed to restore node: ' + this.title + '\nPlease remove and re-add it.',
-          );
-          this.bgcolor = '#C00';
-        }
-      }
-    });
-    chainCallback(this, 'onSerialize', function (info) {
-      info.widgets_values = {};
-      if (!this.widgets) {
-        //object has no widgets, there is nothing to store
-        return;
-      }
-      for (let w of this.widgets) {
-        info.widgets_values[w.name] = w.value;
-      }
-    });
-  });
-}
-
-function formatUploadedUrl(params) {
-  if (params.url) {
-    return params.url;
-  }
-
-  params = { ...params };
-
-  if (!params.filename && params.name) {
-    params.filename = params.name;
-    delete params.name;
-  }
-
-  return api.apiURL('/view?' + new URLSearchParams(params));
-}
-
-async function uploadFile(file) {
-  //TODO: Add uploaded file to cache with Cache.put()?
-  try {
-    // Wrap file in formdata so it includes filename
-    const body = new FormData();
-    const i = file.webkitRelativePath.lastIndexOf('/');
-    const subfolder = file.webkitRelativePath.slice(0, i + 1);
-    const new_file = new File([file], file.name, {
-      type: file.type,
-      lastModified: file.lastModified,
-    });
-    body.append('image', new_file);
-    if (i > 0) {
-      body.append('subfolder', subfolder);
-    }
-    const resp = await api.fetchApi('/upload/image', {
-      method: 'POST',
-      body,
-    });
-
-    if (resp.status === 200 || resp.status === 201) {
-      return resp.json();
-    } else {
-      alert(`Upload failed: ${resp.statusText}`);
-    }
-  } catch (error) {
-    alert(`Upload failed: ${error}`);
-  }
-}
-
-function addVideoCustomSize(nodeType, nodeData, widgetName) {
-  //Add the extra size widgets now
-  //This takes some finagling as widget order is defined by key order
-  const newWidgets = {};
-  for (let key in nodeData.input.required) {
-    newWidgets[key] = nodeData.input.required[key];
-    if (key == widgetName) {
-      newWidgets[key][0] = newWidgets[key][0].concat(['Custom Width', 'Custom Height', 'Custom']);
-      newWidgets['custom_width'] = ['INT', { default: 512, min: 8, step: 8 }];
-      newWidgets['custom_height'] = ['INT', { default: 512, min: 8, step: 8 }];
-    }
-  }
-  nodeData.input.required = newWidgets;
-
-  //Add a callback which sets up the actual logic once the node is created
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const node = this;
-    const sizeOptionWidget = node.widgets.find((w) => w.name === widgetName);
-    const widthWidget = node.widgets.find((w) => w.name === 'custom_width');
-    const heightWidget = node.widgets.find((w) => w.name === 'custom_height');
-    injectHidden(widthWidget);
-    widthWidget.options.serialize = false;
-    injectHidden(heightWidget);
-    heightWidget.options.serialize = false;
-    sizeOptionWidget._value = sizeOptionWidget.value;
-    Object.defineProperty(sizeOptionWidget, 'value', {
-      set: function (value) {
-        //TODO: Only modify hidden/reset size when a change occurs
-        if (value == 'Custom Width') {
-          widthWidget.hidden = false;
-          heightWidget.hidden = true;
-        } else if (value == 'Custom Height') {
-          widthWidget.hidden = true;
-          heightWidget.hidden = false;
-        } else if (value == 'Custom') {
-          widthWidget.hidden = false;
-          heightWidget.hidden = false;
-        } else {
-          widthWidget.hidden = true;
-          heightWidget.hidden = true;
-        }
-        node.setSize([node.size[0], node.computeSize([node.size[0], node.size[1]])[1]]);
-        this._value = value;
+  const widget = new DOMWidgetImpl({
+    node,
+    name,
+    type: 'customtext',
+    element: inputEl,
+    options: {
+      hideOnZoom: true,
+      getValue() {
+        return inputEl.value
       },
-      get: function () {
-        return this._value;
-      },
-    });
-    //Ensure proper visibility/size state for initial value
-    sizeOptionWidget.value = sizeOptionWidget._value;
+      setValue(v) {
+        inputEl.value = v
+      }
+    }
+  })
+  addWidget(node, widget)
 
-    sizeOptionWidget.serializeValue = function () {
-      if (this.value == 'Custom Width') {
-        return widthWidget.value + 'x?';
-      } else if (this.value == 'Custom Height') {
-        return '?x' + heightWidget;
-      } else if (this.value == 'Custom') {
-        return widthWidget.value + 'x' + heightWidget.value;
+  widget.inputEl = inputEl
+  widget.options.minNodeSize = [400, 200]
+
+  inputEl.addEventListener('input', () => {
+    widget.value = inputEl.value
+    widget.callback?.(inputEl.value, true)
+  })
+
+  // Allow middle mouse button panning
+  inputEl.addEventListener('pointerdown', (event) => {
+    if (event.button === 1) {
+      app.canvas.processMouseDown(event)
+    }
+  })
+
+  inputEl.addEventListener('pointermove', (event) => {
+    if ((event.buttons & 4) === 4) {
+      app.canvas.processMouseMove(event)
+    }
+  })
+
+  inputEl.addEventListener('pointerup', (event) => {
+    if (event.button === 1) {
+      app.canvas.processMouseUp(event)
+    }
+  })
+
+  /** Timer reference. `null` when the timer completes. */
+  let ignoreEventsTimer = null
+  /** Total number of events ignored since the timer started. */
+  let ignoredEvents = 0
+
+  // Pass wheel events to the canvas when appropriate
+  inputEl.addEventListener('wheel', (event) => {
+    if (!Object.is(event.deltaX, -0)) return
+
+    // If the textarea has focus, require more effort to activate pass-through
+    const multiplier = document.activeElement === inputEl ? 2 : 1
+    const maxScrollHeight = inputEl.scrollHeight - inputEl.clientHeight
+
+    if (
+      (event.deltaY < 0 && inputEl.scrollTop === 0) ||
+      (event.deltaY > 0 && inputEl.scrollTop === maxScrollHeight)
+    ) {
+      // Attempting to scroll past the end of the textarea
+      if (!ignoreEventsTimer || ignoredEvents > 25 * multiplier) {
+        app.canvas.processMouseWheel(event)
       } else {
-        return this.value;
+        ignoredEvents++
       }
-    };
-  });
+    } else if (event.deltaY !== 0) {
+      // Start timer whenever a successful scroll occurs
+      ignoredEvents = 0
+      if (ignoreEventsTimer) clearTimeout(ignoreEventsTimer)
+
+      ignoreEventsTimer = setTimeout(() => {
+        ignoreEventsTimer = null
+      }, 800 * multiplier)
+    }
+  })
+
+  return widget
 }
 
-function addUploadWidget(nodeType, widgetName, type) {
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === widgetName);
-    if (pathWidget.element) {
-      pathWidget.options.getMinHeight = () => 50;
-      pathWidget.options.getMaxHeight = () => 150;
+function addImageUploadWidget(nodeType, nodeData, imageInputName) {
+  const { input } = nodeData ?? {}
+  const required = input?.required
+  if (!required) return
+
+  const imageOptions = required.image
+  delete required.image
+
+  chainCallback(nodeType.prototype, "onNodeCreated", function () {
+    this.previewMediaType = 'image'
+
+    const urlWidget = addUrlWidget(this, imageInputName, imageOptions[1])
+    // move urlWidget to the first position
+    const widgets = this.widgets.filter(w => w !== urlWidget)
+    this.widgets = [urlWidget, ...widgets]
+
+    ComfyWidgets.IMAGEUPLOAD(
+      this,
+      'upload',
+      ["IMAGEUPLOAD", { "image_upload": true, imageInputName }],
+    )
+
+    const safeLoadImageFromUrl = (url) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(null);
+        img.src = url;
+      });
     }
 
-    const fileInput = document.createElement('input');
-    chainCallback(this, 'onRemoved', () => {
-      fileInput?.remove();
-    });
+    let initialImgs = undefined;
+    let isUrlImageSet = false
 
-    if (type === 'image') {
-      Object.assign(fileInput, {
-        type: 'file',
-        accept: 'image/png,image/jpeg,image/webp',
-        style: 'display: none',
-        multiple: true,
-        onchange: async () => {
-          if (!fileInput.files.length) {
-            return;
-          }
-
-          let successes = [];
-          for (const file of fileInput.files) {
-            const params = await uploadFile(file);
-
-            if (!!params) {
-              successes.push(params);
-            } else {
-              // Upload failed, but some prior uploads may have succeeded
-              // Stop future uploads to prevent cascading failures
-              // and only add to list if an upload has succeeded
-              if (successes.length) {
-                break;
-              } else {
-                return;
-              }
-            }
-          }
-
-          nodeType.images = successes.map(formatUploadedUrl);
-          pathWidget.value = nodeType.images.join('\n');
-          fileInput.value = '';
-        },
-      });
-    } else if (type === 'video') {
-      Object.assign(fileInput, {
-        type: 'file',
-        accept: 'video/webm,video/mp4,video/mkv,image/gif,image/webp',
-        style: 'display: none',
-        multiple: true,
-        onchange: async () => {
-          if (!fileInput.files.length) {
-            return;
-          }
-
-          let successes = [];
-          for (const file of fileInput.files) {
-            const params = await uploadFile(file);
-
-            if (!!params) {
-              successes.push(params);
-            } else {
-              // Upload failed, but some prior uploads may have succeeded
-              // Stop future uploads to prevent cascading failures
-              // and only add to list if an upload has succeeded
-              if (successes.length) {
-                break;
-              } else {
-                return;
-              }
-            }
-          }
-
-          pathWidget.value = successes.map(formatUploadedUrl).join('\n');
-          fileInput.value = '';
-        },
-      });
-    } else {
-      throw new Error(`Unknown upload type ${type}`);
-    }
-
-    document.body.append(fileInput);
-    let uploadWidget = this.addWidget('button', 'choose ' + type + ' to upload', 'image', () => {
-      //clear the active click event
-      app.canvas.node_widget = null;
-      fileInput.click();
-    });
-    uploadWidget.options.serialize = false;
-  });
-}
-
-function addVideoPreview(nodeType, options = {}) {
-  const createVideoNode = (url) => {
-    return new Promise((cb) => {
-      const videoEl = document.createElement('video');
-      Object.defineProperty(videoEl, 'naturalWidth', {
-        get: () => {
-          return videoEl.videoWidth;
-        },
-      });
-      Object.defineProperty(videoEl, 'naturalHeight', {
-        get: () => {
-          return videoEl.videoHeight;
-        },
-      });
-      videoEl.addEventListener('loadedmetadata', () => {
-        videoEl.controls = false;
-        videoEl.loop = true;
-        videoEl.muted = true;
-        cb(videoEl);
-      });
-      videoEl.addEventListener('error', () => {
-        cb();
-      });
-      videoEl.src = url;
-    });
-  };
-
-  const createImageNode = (url) => {
-    return new Promise((cb) => {
-      const imgEl = document.createElement('img');
-      imgEl.onload = () => {
-        cb(imgEl);
-      };
-      imgEl.addEventListener('error', () => {
-        cb();
-      });
-      imgEl.src = url;
-    });
-  };
-
-  nodeType.prototype.onDrawBackground = function (ctx) {
-    if (this.flags.collapsed) return;
-
-    let imageURLs = (this.images ?? []).map((i) =>
-      typeof i === 'string' ? i : formatUploadedUrl(i),
-    );
-    let imagesChanged = false;
-
-    if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
-      this.displayingImages = imageURLs;
-      imagesChanged = true;
-    }
-
-    if (!imagesChanged) return;
-    if (!imageURLs.length) {
-      this.imgs = null;
-      this.animatedImages = false;
-      return;
-    }
-
-    const promises = imageURLs.map((url) => {
-      if (url.startsWith('/view')) {
-        url = window.location.origin + url;
-      }
-
-      const u = new URL(url);
-      const filename =
-        u.searchParams.get('filename') || u.searchParams.get('name') || u.pathname.split('/').pop();
-      const ext = filename.split('.').pop();
-      const format = ['gif', 'webp', 'avif'].includes(ext) ? 'image' : 'video';
-      if (format === 'video') {
-        return createVideoNode(url);
-      } else {
-        return createImageNode(url);
-      }
-    });
-
-    Promise.all(promises)
-      .then((imgs) => {
-        this.imgs = imgs.filter(Boolean);
-      })
-      .then(() => {
-        if (!this.imgs.length) return;
-
-        this.animatedImages = true;
-        const widgetIdx = this.widgets?.findIndex((w) => w.name === ANIM_PREVIEW_WIDGET);
-
-        // Instead of using the canvas we'll use a IMG
-        if (widgetIdx > -1) {
-          // Replace content
-          const widget = this.widgets[widgetIdx];
-          widget.options.host.updateImages(this.imgs);
-        } else {
-          const host = createImageHost(this);
-          this.setSizeForImage(true);
-          const widget = this.addDOMWidget(ANIM_PREVIEW_WIDGET, 'img', host.el, {
-            host,
-            getHeight: host.getHeight,
-            onDraw: host.onDraw,
-            hideOnZoom: false,
-          });
-          widget.serializeValue = () => ({
-            height: host.el.clientHeight,
-          });
-          // widget.computeSize = (w) => ([w, 220]);
-
-          widget.options.host.updateImages(this.imgs);
-        }
-
-        this.imgs.forEach((img) => {
-          if (img instanceof HTMLVideoElement) {
-            img.muted = true;
-            img.autoplay = true;
-            img.play();
-          }
-        });
-      });
-  };
-
-  const { textWidget, comboWidget } = options;
-
-  if (textWidget) {
-    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-      const pathWidget = this.widgets.find((w) => w.name === textWidget);
-      pathWidget._value = pathWidget.value;
-      Object.defineProperty(pathWidget, 'value', {
-        set: (value) => {
-          pathWidget._value = value;
-          pathWidget.inputEl.value = value;
-          this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-        },
-        get: () => {
-          return pathWidget._value;
-        },
-      });
-      pathWidget.inputEl.addEventListener('change', (e) => {
-        const value = e.target.value;
-        pathWidget._value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      });
-
-      // Set value to ensure preview displays on initial add.
-      pathWidget.value = pathWidget._value;
-    });
-  }
-
-  if (comboWidget) {
-    chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-      const pathWidget = this.widgets.find((w) => w.name === comboWidget);
-      pathWidget._value = pathWidget.value;
-      Object.defineProperty(pathWidget, 'value', {
-        set: (value) => {
-          pathWidget._value = value;
-          if (!value) {
-            return this.images = []
-          }
-
-          const parts = value.split("/")
-          const filename = parts.pop()
-          const subfolder = parts.join("/")
-          const extension = filename.split(".").pop();
-          const format = (["gif", "webp", "avif"].includes(extension)) ? 'image' : 'video'
-          this.images = [formatUploadedUrl({ filename, subfolder, type: "input", format: format })]
-        },
-        get: () => {
-          return pathWidget._value;
-        },
-      });
-      pathWidget.inputEl.addEventListener('change', (e) => {
-        const value = e.target.value;
-        pathWidget._value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      });
-
-      // Set value to ensure preview displays on initial add.
-      pathWidget.value = pathWidget._value;
-    });
-  }
-
-  chainCallback(nodeType.prototype, "onExecuted", function (message) {
-    if (message?.videos) {
-      this.images = message?.videos.map(formatUploadedUrl);
-    }
-  });
-}
-
-function addImagePreview(nodeType, widgetName) {
-  const onDrawBackground = nodeType.prototype.onDrawBackground;
-  nodeType.prototype.onDrawBackground = function (ctx) {
-    if (this.flags.collapsed) return;
-
-    let imageURLs = (this.images ?? []).map((i) =>
-      typeof i === 'string' ? i : formatUploadedUrl(i),
-    );
-    let imagesChanged = false;
-
-    if (JSON.stringify(this.displayingImages) !== JSON.stringify(imageURLs)) {
-      this.displayingImages = imageURLs;
-      imagesChanged = true;
-    }
-
-    if (imagesChanged) {
+    const setImagesFromUrl = (value = "") => {
       this.imageIndex = null;
-      if (imageURLs.length > 0) {
-        Promise.all(
-          imageURLs.map((src) => {
-            return new Promise((r) => {
-              const img = new Image();
-              img.onload = () => r(img);
-              img.onerror = () => r(null);
-              img.src = src;
-            });
-          }),
-        ).then((imgs) => {
-          this.imgs = imgs.filter(Boolean);
-          this.setSizeForImage?.();
-          app.graph.setDirtyCanvas(true);
-        });
-      } else {
-        this.imgs = null;
+
+      const urls = value.split("\n").filter(Boolean).map(formatUrl);
+      if (!urls.length) {
+        this.imgs = undefined;
+        this.widgets = this.widgets.filter((w) => w.name !== "$$canvas-image-preview");
+        isUrlImageSet = true;
+        return
       }
+
+      return Promise.all(
+        urls.map(safeLoadImageFromUrl)
+      ).then((imgs) => {
+        initialImgs = imgs.filter(Boolean);
+        this.imgs = initialImgs.length > 0 ? initialImgs : undefined;
+        if (!this.imgs) {
+          this.widgets = this.widgets.filter((w) => w.name !== "$$canvas-image-preview");
+        }
+        app.graph.setDirtyCanvas(true);
+
+        // cancel any img change in the next 2 seconds
+        // to prevent `ComfyUI `overwriting the image
+        setTimeout(() => {
+          isUrlImageSet = true;
+        }, 2000);
+
+        return initialImgs;
+      })
     }
 
-    onDrawBackground?.call(this, ctx);
-  };
+    addWidgetChangeCallback(this, {
+      name: "imgs",
+      shouldChange: (value) => {
+        if (isUrlImageSet) return true;
+        return value === initialImgs;
+      }
+    })
 
-  chainCallback(nodeType.prototype, 'onNodeCreated', function () {
-    const pathWidget = this.widgets.find((w) => w.name === widgetName);
-    pathWidget._value = pathWidget.value;
-    Object.defineProperty(pathWidget, 'value', {
-      set: (value) => {
-        pathWidget._value = value;
-        pathWidget.inputEl.value = value;
-        this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-      },
-      get: () => {
-        return pathWidget._value;
-      },
-    });
-    pathWidget.inputEl.addEventListener('change', (e) => {
-      const value = e.target.value;
-      pathWidget._value = value;
-      this.images = (value ?? '').split('\n').filter((url) => URL_REGEX.test(url));
-    });
+    urlWidget.callback = (value) => {
+      if (!value) { // from upload
+        value = urlWidget.value.split("\n").filter(Boolean).map(formatUrl).join("\n")
+      }
+      if (Array.isArray(value)) {
+        value = value.map(formatUrl).join("\n")
+      }
+      if (value !== urlWidget.options.getValue()) {
+        urlWidget.options.setValue(value)
+      }
+      setImagesFromUrl(value)
+    }
 
-    // Set value to ensure preview displays on initial add.
-    pathWidget.value = pathWidget._value;
-  });
+    this.clipspace = () => {
+      const widgets = this.widgets
+        .map(({ type, name, value }) => ({
+          type,
+          name,
+          value,
+        }))
+
+      widgets.push(
+        {
+          type: "text",
+          name: imageInputName,
+          value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
+        },
+        {
+          type: "text",
+          name: "url",
+          value: (urlWidget.value || "").split("\n").filter(Boolean)[0],
+        }
+      )
+
+      return { widgets, images: undefined }
+    }
+
+    requestAnimationFrame(() => {
+      setImagesFromUrl(urlWidget.value);
+    })
+  })
 }
 
 app.registerExtension({
@@ -587,15 +263,10 @@ app.registerExtension({
       return;
     }
 
-    addKVState(nodeType);
-
     if (nodeData.name === 'LoadImageFromUrl' || nodeData.name === 'LoadImageAsMaskFromUrl') {
-      addUploadWidget(nodeType, 'url', 'image');
-      addImagePreview(nodeType, 'url');
-    } else if (nodeData.name == 'LoadVideoFromUrl') {
-      addVideoCustomSize(nodeType, nodeData, 'force_size');
-      addUploadWidget(nodeType, 'video', 'video');
-      addVideoPreview(nodeType, { textWidget: 'video' });
+      addImageUploadWidget(nodeType, nodeData, 'image');
     }
+
+    addKVState(nodeType);
   },
 });
