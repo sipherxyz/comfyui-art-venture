@@ -10,3 +10,4 @@ pydantic
 segment_anything
 omegaconf
 boto3>=1.34.101
+google-generativeai>=0.8.0

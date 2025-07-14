@@ -51,6 +51,19 @@ claude3_models = [
 ]
 claude2_models = ["claude-2.1"]
 
+gemini_vision_models = [
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro",
+    "gemini-1.0-pro-vision",
+]
+
+gemini_models = [
+    *gemini_vision_models,
+    "gemini-1.0-pro",
+]
+
 aws_regions = [
     "us-east-1",
     "us-west-2",
@@ -134,6 +147,23 @@ class LLMMessage(BaseModel):
         return {
             "role": self.role,
             "content": content,
+        }
+
+    def to_gemini_message(self):
+        parts = [self.text]
+
+        if self.images:
+            import base64
+            for img in self.images:
+                image_data = base64.b64decode(img)
+                parts.append({
+                    "mime_type": "image/png",
+                    "data": image_data
+                })
+
+        return {
+            "role": "user" if self.role == "user" else "model",
+            "parts": parts,
         }
 
 
@@ -338,7 +368,76 @@ class AwsBedrockClaudeApi(BaseModel):
         return data["completion"]
 
 
-LLMApi = Union[OpenAIApi, ClaudeApi]
+class GeminiApi(BaseModel):
+    api_key: str
+    timeout: Optional[int] = 60
+    genai: Any = None
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        
+        ensure_package("google-generativeai", required_version=">=0.8.0")
+        import google.generativeai as genai
+        
+        genai.configure(api_key=self.api_key)
+        self.genai = genai
+
+    def chat(self, messages: List[LLMMessage], config: LLMConfig, seed=None):
+        if config.model not in gemini_models:
+            raise Exception(f"Must provide a Gemini model, got {config.model}")
+
+        system_message = [m for m in messages if m.role == "system"]
+        user_messages = [m for m in messages if m.role != "system"]
+        
+        model = self.genai.GenerativeModel(
+            model_name=config.model,
+            system_instruction=system_message[0].text if len(system_message) > 0 else None
+        )
+
+        generation_config = self.genai.types.GenerationConfig(
+            max_output_tokens=config.max_token,
+            temperature=config.temperature,
+        )
+
+        if len(user_messages) == 1 and user_messages[0].role == "user":
+            parts = [user_messages[0].text]
+            if user_messages[0].images:
+                import base64
+                for img in user_messages[0].images:
+                    image_data = base64.b64decode(img)
+                    parts.append({
+                        "mime_type": "image/png",
+                        "data": image_data
+                    })
+            
+            response = model.generate_content(
+                parts,
+                generation_config=generation_config
+            )
+        else:
+            formatted_messages = []
+            for msg in user_messages:
+                formatted_messages.append(msg.to_gemini_message())
+            
+            chat = model.start_chat(history=formatted_messages[:-1])
+            last_message = formatted_messages[-1]
+            
+            response = chat.send_message(
+                last_message["parts"],
+                generation_config=generation_config
+            )
+
+        if not response.text:
+            raise Exception("Gemini API returned empty response")
+            
+        return response.text
+
+    def complete(self, prompt: str, config: LLMConfig, seed=None):
+        messages = [LLMMessage(role=LLMMessageRole.user, text=prompt)]
+        return self.chat(messages, config, seed)
+
+
+LLMApi = Union[OpenAIApi, ClaudeApi, GeminiApi]
 
 
 class OpenAIApiNode:
@@ -467,6 +566,29 @@ class AwsBedrockClaudeApiNode:
         )
 
 
+class GeminiApiNode:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "google_api_key": ("STRING", {"multiline": False}),
+            },
+        }
+
+    RETURN_TYPES = ("LLM_API",)
+    RETURN_NAMES = ("llm_api",)
+    FUNCTION = "create_api"
+    CATEGORY = "ArtVenture/LLM"
+
+    def create_api(self, google_api_key):
+        if not google_api_key or google_api_key == "":
+            google_api_key = os.environ.get("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise Exception("Google API key is required.")
+
+        return (GeminiApi(api_key=google_api_key),)
+
+
 class LLMApiConfigNode:
     @classmethod
     def INPUT_TYPES(cls):
@@ -478,7 +600,8 @@ class LLMApiConfigNode:
                     + claude2_models
                     + bedrock_claude3_models
                     + bedrock_claude2_models
-                    + bedrock_mistral_models,
+                    + bedrock_mistral_models
+                    + gemini_models,
                     {"default": gpt_vision_models[0]},
                 ),
                 "max_token": ("INT", {"default": 1024}),
@@ -589,6 +712,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_ClaudeApi": ClaudeApiNode,
     "AV_AwsBedrockClaudeApi": AwsBedrockClaudeApiNode,
     "AV_AwsBedrockMistralApi": AwsBedrockMistralApiNode,
+    "AV_GeminiApi": GeminiApiNode,
     "AV_LLMApiConfig": LLMApiConfigNode,
     "AV_LLMMessage": LLMMessageNode,
     "AV_LLMChat": LLMChatNode,
@@ -600,6 +724,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ClaudeApi": "Claude API",
     "AV_AwsBedrockClaudeApi": "AWS Bedrock Claude API",
     "AV_AwsBedrockMistralApi": "AWS Bedrock Mistral API",
+    "AV_GeminiApi": "Gemini API",
     "AV_LLMApiConfig": "LLM API Config",
     "AV_LLMMessage": "LLM Message",
     "AV_LLMChat": "LLM Chat",
