@@ -372,7 +372,6 @@ class AVCheckpointMerge:
                 "model1": ("MODEL",),
                 "model2": ("MODEL",),
                 "model1_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
-                "model2_weight": ("FLOAT", {"default": 1.0, "min": -1.0, "max": 1.0, "step": 0.01}),
             }
         }
 
@@ -380,15 +379,16 @@ class AVCheckpointMerge:
     FUNCTION = "merge"
 
     CATEGORY = "Art Venture/Model Merging"
+    DESCRIPTION = "DEPRECATED: Use ComfyUI's native ModelMergeSimple instead"
 
-    def merge(self, model1, model2, model1_weight, model2_weight):
+    def merge(self, model1, model2, model1_weight):
         m = model1.clone()
         k1 = model1.get_key_patches("diffusion_model.")
         k2 = model2.get_key_patches("diffusion_model.")
-        for k in k1:
-            if k in k2:
-                a = k1[k][0]
-                b = k2[k][0]
+        for k in k2:
+            if k in k1:
+                a, _ = k1[k][0]
+                b, _ = k2[k][0]
 
                 if a.shape != b.shape and a.shape[0:1] + a.shape[2:] == b.shape[0:1] + b.shape[2:]:
                     if a.shape[1] == 4 and b.shape[1] == 9:
@@ -400,14 +400,7 @@ class AVCheckpointMerge:
                             "When merging instruct-pix2pix model with a normal one, model1 must be the instruct-pix2pix model."
                         )
 
-                    c = torch.zeros_like(a)
-                    c[:, 0:4, :, :] = b
-                    b = c
-
-                m.add_patches({k: (b,)}, model2_weight, model1_weight)
-            else:
-                logger.warn(f"Key {k} not found in model2")
-                m.add_patches({k: k1[k]}, -1.0, 1.0)  # zero out
+                m.add_patches({k: k2[k]}, 1 - model1_weight, model1_weight)
 
         return (m,)
 
@@ -462,7 +455,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_LoraLoader": "Lora Loader",
     "AV_LoraListLoader": "Lora List Loader",
     "AV_LoraListStacker": "Lora List Stacker",
-    "AV_CheckpointMerge": "Checkpoint Merge",
+    "AV_CheckpointMerge": "[Deprecated] Checkpoint Merge",
     "AV_CheckpointSave": "Checkpoint Save",
 }
 
