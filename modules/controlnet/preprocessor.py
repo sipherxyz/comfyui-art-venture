@@ -48,7 +48,7 @@ _preprocessors_map = {
     "teed": "TEEDPreprocessor",
     "color": "ColorPreprocessor",
     "sam": "SAMPreprocessor",
-    "tile": "TilePreprocessor"
+    "tile": "TilePreprocessor",
 }
 
 
@@ -67,10 +67,10 @@ try:
                 break
 
     if module_path is None:
-        raise Exception("Could not find ControlNetPreprocessors nodes")
+        raise Exception("Could not find comfyui_controlnet_aux nodes, AV_ControlNetPreprocessor will not work. Please install comfyui_controlnet_aux first")
 
     module = load_module(module_path)
-    print("Loaded ControlNetPreprocessors nodes from", module_path)
+    print("Loaded comfyui_controlnet_aux nodes from", module_path)
 
     nodes: Dict = getattr(module, "NODE_CLASS_MAPPINGS")
     available_preprocessors: list[str] = getattr(module, "PREPROCESSOR_OPTIONS")
