@@ -91,6 +91,7 @@ class AV_ControlNetPreprocessor:
     RETURN_NAMES = ("IMAGE", "CNET_NAME")
     FUNCTION = "detect_controlnet"
     CATEGORY = "Art Venture/Loaders"
+    DESCRIPTION = "DEPRECATED: Use comfyui_controlnet_aux's AIO Preprocessor instead"
 
     def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override="None"):
         if preprocessor_override != "None":
@@ -333,5 +334,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_ControlNetEfficientLoaderAdvanced": "ControlNet Loader Adv.",
     "AV_ControlNetEfficientStacker": "ControlNet Stacker Adv.",
     "AV_ControlNetEfficientStackerSimple": "ControlNet Stacker",
-    "AV_ControlNetPreprocessor": "ControlNet Preprocessor",
+    "AV_ControlNetPreprocessor": "[Deprecated] ControlNet Preprocessor",
 }
