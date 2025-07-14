@@ -5,10 +5,10 @@ from PIL import Image, ImageOps
 from typing import Dict
 
 from .sam.nodes import SAMLoader, GetSAMEmbedding, SAMEmbeddingToImage
-from .lama import LaMaInpaint
+from .lama import LoadLaMaModel, LaMaInpaint
 
 from ..masking import get_crop_region, expand_crop_region
-from ..image_utils import ResizeMode, resize_image, flatten_image
+from ..image_utils import ResizeMode, resize_image
 from ..utils import numpy2pil, tensor2pil, pil2tensor
 
 
@@ -238,6 +238,7 @@ NODE_CLASS_MAPPINGS = {
     "AV_SAMLoader": SAMLoader,
     "GetSAMEmbedding": GetSAMEmbedding,
     "SAMEmbeddingToImage": SAMEmbeddingToImage,
+    "LoadLaMaModel": LoadLaMaModel,
     "LaMaInpaint": LaMaInpaint,
     "PrepareImageAndMaskForInpaint": PrepareImageAndMaskForInpaint,
     "OverlayInpaintedLatent": OverlayInpaintedLatent,
@@ -248,6 +249,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AV_SAMLoader": "SAM Loader",
     "GetSAMEmbedding": "Get SAM Embedding",
     "SAMEmbeddingToImage": "SAM Embedding to Image",
+    "LoadLaMaModel": "LaMa Loader",
     "LaMaInpaint": "LaMa Remove Object",
     "PrepareImageAndMaskForInpaint": "Prepare Image & Mask for Inpaint",
     "OverlayInpaintedLatent": "Overlay Inpainted Latent",
