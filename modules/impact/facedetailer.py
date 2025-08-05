@@ -6,7 +6,7 @@ import folder_paths
 from ..utils import load_module
 
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
-efficieny_dir_names = ["ImpactPack", "ComfyUI-Impact-Pack"]
+efficieny_dir_names = ["ImpactPack", "ComfyUI-Impact-Pack", "comfyui-impact-pack"]
 
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}

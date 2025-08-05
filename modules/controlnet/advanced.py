@@ -8,7 +8,7 @@ import comfy.controlnet
 from ..utils import load_module
 
 custom_nodes = folder_paths.get_folder_paths("custom_nodes")
-advanced_cnet_dir_names = ["AdvancedControlNet", "ComfyUI-Advanced-ControlNet"]
+advanced_cnet_dir_names = ["AdvancedControlNet", "ComfyUI-Advanced-ControlNet", "comfyui-advanced-controlnet"]
 
 
 def comfy_load_controlnet(control_net_name: str, **_):
