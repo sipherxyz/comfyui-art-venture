@@ -129,89 +129,27 @@ Remove objects from images using LaMa model.
 
 ### LLM Nodes
 
-#### LLMApiConfig
+- **LLM API Config**: Generic model settings (model, tokens, temperature).
+- **NanoBanana API Config**: Preset for Gemini 2.5 Flash Image (modalities/aspect ratio).
+- **OpenAI API**: Connect to OpenAI chat/completions.
+- **OpenRouter API**: Route to many providers via OpenRouter; supports text and images where available.
+- **Gemini API**: Google Gemini (text and image generation).
+- **Claude API**: Anthropic Claude messages.
+- **AWS Bedrock Claude API**: Claude via AWS Bedrock.
+- **AWS Bedrock Mistral API**: Mistral completions via AWS Bedrock.
+- **LLM Message**: Build message lists (system/user/assistant) with optional images.
+- **LLM Chat**: Run multi-turn chats; returns text and optional images.
+- **LLM Completion**: Single-prompt completion.
 
-Configures generic LLM API parameters.
+![LLM chat workflow](https://github.com/user-attachments/assets/45b8d4fd-57cd-4bd9-8274-d3e6ac4ef938)
 
-**Inputs:**
+![NanoBanana workflow](https://github.com/user-attachments/assets/9d699b47-6239-419f-b778-348618c99c4a)
 
-- `model`: Model name (GPT-3.5, GPT-4, etc)
-- `max_token`: Maximum tokens
-- `temperature`: Temperature parameter
+# Known Issues
 
-#### OpenAIApi
+## AV_controlnetPreprocessor is missing
 
-Configures OpenAI API access.
+`AV_controlnetPreprocessor` is a wrapper for [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) that I created to quickly switch between multiple preprocessors, instead of having a separate node for each one. It requires `comfyui_controlnet_aux` to be installed, otherwise it will not be available.
 
-**Inputs:**
+Since `AIO_Preprocessor` is already implemented in `comfyui_controlnet_aux`, this node will be deprecated. You are recommended to switch to using `AIO_Preprocessor` node directly.
 
-- `openai_api_key`: OpenAI API key
-- `endpoint`: API endpoint URL
-
-### Claude API Nodes
-
-#### ClaudeApi
-
-Configures Anthropic Claude API access.
-
-**Inputs:**
-
-- `claude_api_key`: Claude API key
-- `endpoint`: API endpoint
-- `version`: API version
-
-#### AwsBedrockClaudeApi
-
-Configures AWS Bedrock Claude API access.
-
-**Inputs:**
-
-- `aws_access_key_id`: AWS access key
-- `aws_secret_access_key`: AWS secret key
-- `region`: AWS region
-- `version`: API version
-
-#### AwsBedrockMistralApi
-
-Configures AWS Bedrock Mistral API access.
-
-**Inputs:**
-
-- `aws_access_key_id`: AWS access key
-- `aws_secret_access_key`: AWS secret key
-- `region`: AWS region
-
-#### LLMMessage
-
-Creates a message for LLM interaction.
-
-**Inputs:**
-
-- `role`: Message role (system/user/assistant)
-- `text`: Message content
-- `image`: Optional image input
-- `messages`: Previous message history
-
-#### LLMChat
-
-Handles chat interactions with LLMs.
-
-**Inputs:**
-
-- `messages`: Message history
-- `api`: LLM API configuration
-- `config`: Model configuration
-- `seed`: Random seed
-
-#### LLMCompletion
-
-Handles completion requests to LLMs.
-
-**Inputs:**
-
-- `prompt`: Input prompt
-- `api`: LLM API configuration
-- `config`: Model configuration
-- `seed`: Random seed
-
-![Screenshot 2024-10-30 at 11 20 12](https://github.com/user-attachments/assets/45b8d4fd-57cd-4bd9-8274-d3e6ac4ef938)
