@@ -9,4 +9,4 @@ kornia
 pydantic
 segment_anything
 omegaconf
-boto3>=1.34.101
+boto3
