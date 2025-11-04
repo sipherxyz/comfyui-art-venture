@@ -6,14 +6,6 @@ import { ComfyWidgets } from '../../scripts/widgets.js'
 
 import { chainCallback, addKVState, addWidgetChangeCallback } from './utils.js';
 
-const style = `
-.comfy-img-preview video {
-  object-fit: contain;
-  width: var(--comfy-img-preview-width);
-  height: var(--comfy-img-preview-height);
-}
-`;
-
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl'];
 
 const formatUrl = (url) => {
