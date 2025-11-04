@@ -37,17 +37,13 @@ class ColorBlend:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "color_blending_mode"
-    CATEGORY = "Art Venture/Post Processing"
+    CATEGORY = "ArtVenture/Post Processing"
 
     def color_blending_mode(self, bw_layer, color_layer):
         if bw_layer.shape[0] < color_layer.shape[0]:
-            bw_layer = bw_layer.repeat(color_layer.shape[0], 1, 1, 1)[
-                : color_layer.shape[0]
-            ]
+            bw_layer = bw_layer.repeat(color_layer.shape[0], 1, 1, 1)[: color_layer.shape[0]]
         if bw_layer.shape[0] > color_layer.shape[0]:
-            color_layer = color_layer.repeat(bw_layer.shape[0], 1, 1, 1)[
-                : bw_layer.shape[0]
-            ]
+            color_layer = color_layer.repeat(bw_layer.shape[0], 1, 1, 1)[: bw_layer.shape[0]]
 
         batch_size, *_ = bw_layer.shape
         tensor_output = torch.empty_like(bw_layer)
@@ -70,8 +66,6 @@ class ColorBlend:
         for i in range(batch_size):
             blend = color_blend(image1[i], image2[i])
             blend = np.stack([blend])
-            tensor_output[i : i + 1] = (
-                torch.from_numpy(blend.transpose(0, 3, 1, 2)) / 255.0
-            ).permute(0, 2, 3, 1)
+            tensor_output[i : i + 1] = (torch.from_numpy(blend.transpose(0, 3, 1, 2)) / 255.0).permute(0, 2, 3, 1)
 
         return (tensor_output,)

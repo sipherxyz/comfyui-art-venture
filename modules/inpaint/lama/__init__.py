@@ -55,7 +55,7 @@ class LoadLaMaModel:
         }
 
     RETURN_TYPES = ("LAMA",)
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "ArtVenture/Inpainting"
     FUNCTION = "load_model"
 
     def load_model(self, model_name: str):

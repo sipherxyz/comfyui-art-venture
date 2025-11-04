@@ -36,7 +36,7 @@ class ColorCorrect:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "color_correct"
 
-    CATEGORY = "Art Venture/Post Processing"
+    CATEGORY = "ArtVenture/Post Processing"
 
     def color_correct(
         self,

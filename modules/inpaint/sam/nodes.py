@@ -33,7 +33,7 @@ class SAMLoader:
     RETURN_TYPES = ("AV_SAM_MODEL",)
     RETURN_NAMES = ("sam_model",)
     FUNCTION = "load_model"
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
 
     def load_model(self, model_name):
         modelname = folder_paths.get_full_path("sams", model_name)
@@ -69,7 +69,7 @@ class GetSAMEmbedding:
         }
 
     RETURN_TYPES = ("SAM_EMBEDDING",)
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
     FUNCTION = "get_sam_embedding"
 
     def get_sam_embedding(self, image, sam_model, device_mode="AUTO"):
@@ -103,7 +103,7 @@ class SAMEmbeddingToImage:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
     FUNCTION = "sam_embedding_to_noise_image"
 
     def sam_embedding_to_noise_image(self, embedding: np.ndarray):

@@ -161,12 +161,15 @@ class UtilLoadImageFromUrl:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("STRING", {
-                    "default": "",
-                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
-                    "multiline": True,
-                    "dynamicPrompts": False,
-                }),
+                "image": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                    },
+                ),
             },
             "optional": {
                 "keep_alpha_channel": (
@@ -183,7 +186,7 @@ class UtilLoadImageFromUrl:
     RETURN_TYPES = ("IMAGE", "MASK", "BOOLEAN")
     OUTPUT_IS_LIST = (True, True, False)
     RETURN_NAMES = ("images", "masks", "has_image")
-    CATEGORY = "Art Venture/Image"
+    CATEGORY = "ArtVenture/Image"
     FUNCTION = "load_image"
 
     def load_image(self, image: str, keep_alpha_channel=False, output_mode=False):
@@ -243,12 +246,15 @@ class UtilLoadImageAsMaskFromUrl(UtilLoadImageFromUrl):
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("STRING", {
-                    "default": "",
-                    "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
-                    "multiline": True,
-                    "dynamicPrompts": False,
-                }),
+                "image": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "placeholder": "Input image paths or URLS one per line. Eg:\nhttps://example.com/image.png\nfile:///path/to/local/image.jpg\ndata:image/png;base64,...",
+                        "multiline": True,
+                        "dynamicPrompts": False,
+                    },
+                ),
                 "channel": (["alpha", "red", "green", "blue"],),
             },
             "optional": {
@@ -316,7 +322,7 @@ class UtilLoadJsonFromText:
         }
 
     RETURN_TYPES = ("JSON",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "load_json"
 
     def load_json(self, data: str):
@@ -336,7 +342,7 @@ class UtilLoadJsonFromUrl:
         }
 
     RETURN_TYPES = ("JSON",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "load_json"
 
     def load_json(self, url: str, print_to_console=False):
@@ -362,7 +368,7 @@ class UtilGetObjectFromJson:
         }
 
     RETURN_TYPES = ("JSON",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_objects_from_json"
     OUTPUT_NODE = True
 
@@ -381,7 +387,7 @@ class UtilGetTextFromJson:
         }
 
     RETURN_TYPES = ("STRING",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_string_from_json"
     OUTPUT_NODE = True
 
@@ -400,7 +406,7 @@ class UtilGetFloatFromJson:
         }
 
     RETURN_TYPES = ("FLOAT",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_float_from_json"
     OUTPUT_NODE = True
 
@@ -419,7 +425,7 @@ class UtilGetIntFromJson:
         }
 
     RETURN_TYPES = ("INT",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_int_from_json"
     OUTPUT_NODE = True
 
@@ -438,7 +444,7 @@ class UtilGetBoolFromJson:
         }
 
     RETURN_TYPES = ("BOOLEAN",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_bool_from_json"
     OUTPUT_NODE = True
 
@@ -457,7 +463,7 @@ class UtilRandomInt:
         }
 
     RETURN_TYPES = ("INT", "STRING")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "random_int"
 
     @classmethod
@@ -480,7 +486,7 @@ class UtilRandomFloat:
         }
 
     RETURN_TYPES = ("FLOAT", "STRING")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "random_float"
 
     @classmethod
@@ -500,7 +506,7 @@ class UtilStringToInt:
         }
 
     RETURN_TYPES = ("INT",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "string_to_int"
 
     def string_to_int(self, string: str):
@@ -518,7 +524,7 @@ class UtilStringToNumber:
         }
 
     RETURN_TYPES = ("INT", "FLOAT")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "string_to_numbers"
 
     def string_to_numbers(self, string: str, rounding):
@@ -546,7 +552,7 @@ class UtilNumberScaler:
         }
 
     RETURN_TYPES = ("FLOAT",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "scale_number"
 
     def scale_number(self, min: float, max: float, scale_to_min: float, scale_to_max: float, value: float):
@@ -565,7 +571,7 @@ class UtilBooleanPrimitive:
         }
 
     RETURN_TYPES = ("BOOLEAN", "STRING")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "boolean_primitive"
 
     def boolean_primitive(self, value: bool, reverse: bool):
@@ -596,7 +602,7 @@ class UtilTextSwitchCase:
         }
 
     RETURN_TYPES = ("STRING",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "text_switch_case"
 
     def text_switch_case(self, switch_cases: str, condition: str, default_value: str, delimiter: str = ":"):
@@ -637,7 +643,7 @@ class UtilImageMuxer:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_muxer"
 
     def image_muxer(self, image_1, image_2, input_selector, image_3=None, image_4=None):
@@ -673,7 +679,7 @@ class UtilSDXLAspectRatioSelector:
     RETURN_TYPES = ("STRING", "INT", "INT")
     RETURN_NAMES = ("ratio", "width", "height")
     FUNCTION = "get_aspect_ratio"
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
 
     def get_aspect_ratio(self, aspect_ratio):
         width, height = 1024, 1024
@@ -766,7 +772,7 @@ class UtilDependenciesEdit:
         }
 
     RETURN_TYPES = ("DEPENDENCIES",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "edit_dependencies"
 
     def edit_dependencies(
@@ -846,7 +852,7 @@ class UtilImageScaleDown:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_scale_down"
 
     def image_scale_down(self, images, width, height, crop):
@@ -888,7 +894,7 @@ class UtilImageScaleDownBy(UtilImageScaleDown):
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_scale_down_by"
 
     def image_scale_down_by(self, images, scale_by):
@@ -911,7 +917,7 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_scale_down_to_size"
 
     def image_scale_down_to_size(self, images, size, mode):
@@ -941,7 +947,7 @@ class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_scale_down_to_total_pixels"
 
     def image_scale_up_by(self, images: torch.Tensor, scale_by, upscale_model_opt):
@@ -979,7 +985,7 @@ class UtilImageAlphaComposite:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_alpha_composite"
 
     def image_alpha_composite(self, image_1: torch.Tensor, image_2: torch.Tensor):
@@ -1011,7 +1017,7 @@ class UtilImageGaussianBlur:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_gaussian_blur"
 
     def image_gaussian_blur(self, images, radius):
@@ -1036,7 +1042,7 @@ class UtilImageExtractChannel:
 
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("channel_data",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_extract_alpha"
 
     def image_extract_alpha(self, images: torch.Tensor, channel):
@@ -1066,7 +1072,7 @@ class UtilImageApplyChannel:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "image_apply_channel"
 
     def image_apply_channel(self, images: torch.Tensor, channel_data: torch.Tensor, channel):
@@ -1108,7 +1114,7 @@ class UtillQRCodeGenerator:
 
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "create_qr_code"
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
 
     def create_qr_code(self, text, size, qr_version, error_correction, box_size, border):
         ensure_package("qrcode", install_package_name="qrcode[pil]")
@@ -1143,7 +1149,7 @@ class UtilRepeatImages:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "rebatch"
 
     def rebatch(self, images: torch.Tensor, amount):
@@ -1166,7 +1172,7 @@ class UtilSeedSelector:
 
     RETURN_TYPES = ("INT",)
     RETURN_NAMES = ("seed",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_seed"
 
     def get_seed(self, mode, seed, fixed_seed):
@@ -1184,7 +1190,7 @@ class UtilCheckpointSelector:
 
     RETURN_TYPES = (folder_paths.get_filename_list("checkpoints"), "STRING")
     RETURN_NAMES = ("ckpt_name", "ckpt_name_str")
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "get_ckpt_name"
 
     @classmethod
@@ -1207,7 +1213,7 @@ class UtilModelMerge:
         }
 
     RETURN_TYPES = ("MODEL",)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "merge_models"
 
     def merge_models(self, model1, model2, ratio=1.0):
@@ -1241,7 +1247,7 @@ class UtilTextRandomMultiline:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("lines",)
     OUTPUT_IS_LIST = (True,)
-    CATEGORY = "Art Venture/Utils"
+    CATEGORY = "ArtVenture/Utils"
     FUNCTION = "random_multiline"
 
     def random_multiline(self, text: str, amount=1, seed=0):

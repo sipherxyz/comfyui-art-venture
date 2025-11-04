@@ -45,7 +45,7 @@ try:
 
             return inputs
 
-        CATEGORY = "Art Venture/Sampling"
+        CATEGORY = "ArtVenture/Sampling"
 
         def sample(self, *args, sharpness=2.0, **kwargs):
             patch.sharpness = sharpness
@@ -65,7 +65,7 @@ try:
 
             return inputs
 
-        CATEGORY = "Art Venture/Sampling"
+        CATEGORY = "ArtVenture/Sampling"
 
         def sampleadv(self, *args, sharpness=2.0, **kwargs):
             patch.sharpness = sharpness
@@ -83,7 +83,7 @@ try:
             inputs["optional"]["lora_override"] = ("STRING", {"default": "None"})
             return inputs
 
-        CATEGORY = "Art Venture/Loaders"
+        CATEGORY = "ArtVenture/Loaders"
 
         def efficientloader(
             self,

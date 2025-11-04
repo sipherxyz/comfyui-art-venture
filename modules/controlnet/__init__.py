@@ -66,7 +66,7 @@ class AVControlNetLoader(ControlNetLoader):
 
     RETURN_TYPES = ("CONTROL_NET",)
     FUNCTION = "load_controlnet"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def load_controlnet(self, control_net_name, control_net_override="None", timestep_keyframe=None):
         return load_controlnet(control_net_name, control_net_override, timestep_keyframe=timestep_keyframe)
@@ -90,7 +90,7 @@ class AV_ControlNetPreprocessor:
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("IMAGE", "CNET_NAME")
     FUNCTION = "detect_controlnet"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
     DESCRIPTION = "DEPRECATED: Use comfyui_controlnet_aux's AIO Preprocessor instead"
 
     def detect_controlnet(self, image, preprocessor, sd_version, resolution=512, preprocessor_override="None"):
@@ -137,7 +137,7 @@ class AVControlNetEfficientStacker:
     RETURN_TYPES = ("CONTROL_NET_STACK",)
     RETURN_NAMES = ("CNET_STACK",)
     FUNCTION = "control_net_stacker"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def control_net_stacker(
         self,
@@ -234,7 +234,7 @@ class AVControlNetEfficientLoader(ControlNetApply):
 
     RETURN_TYPES = ("CONDITIONING",)
     FUNCTION = "load_controlnet"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def load_controlnet(
         self,
@@ -290,7 +290,7 @@ class AVControlNetEfficientLoaderAdvanced(ControlNetApplyAdvanced):
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
     RETURN_NAMES = ("positive", "negative")
     FUNCTION = "load_controlnet"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def load_controlnet(
         self,

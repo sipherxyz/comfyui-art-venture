@@ -70,7 +70,7 @@ class AVVAELoader(VAELoader):
         inputs["optional"] = {"vae_override": ("STRING", {"default": "None"})}
         return inputs
 
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def load_vae(self, vae_name, vae_override="None"):
         if vae_override != "None":
@@ -92,7 +92,7 @@ class AVLoraLoader(LoraLoader):
         }
         return inputs
 
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def load_lora(self, model, clip, lora_name, *args, lora_override="None", enabled=True, **kwargs):
         if not enabled:
@@ -119,7 +119,7 @@ class AVLoraListStacker:
 
     RETURN_TYPES = ("LORA_STACK",)
     FUNCTION = "load_list_lora"
-    CATEGORY = "Art Venture/Loaders"
+    CATEGORY = "ArtVenture/Loaders"
 
     def parse_lora_list(self, data: str):
         # data is a list of lora model (lora_name, strength_model, strength_clip, url) in json format
@@ -213,7 +213,7 @@ class AVCheckpointModelsToParametersPipe:
         }
 
     RETURN_TYPES = ("PIPE",)
-    CATEGORY = "Art Venture/Parameters"
+    CATEGORY = "ArtVenture/Parameters"
     FUNCTION = "checkpoint_models_to_parameter_pipe"
 
     def checkpoint_models_to_parameter_pipe(
@@ -255,7 +255,7 @@ class AVPromptsToParametersPipe:
         }
 
     RETURN_TYPES = ("PIPE",)
-    CATEGORY = "Art Venture/Parameters"
+    CATEGORY = "ArtVenture/Parameters"
     FUNCTION = "prompt_to_parameter_pipe"
 
     def prompt_to_parameter_pipe(self, positive, negative, pipe: Dict = {}, image=None, mask=None):
@@ -297,7 +297,7 @@ class AVParametersPipeToCheckpointModels:
         "lora_2_name",
         "lora_3_name",
     )
-    CATEGORY = "Art Venture/Parameters"
+    CATEGORY = "ArtVenture/Parameters"
     FUNCTION = "parameter_pipe_to_checkpoint_models"
 
     def parameter_pipe_to_checkpoint_models(self, pipe: Dict = {}):
@@ -346,7 +346,7 @@ class AVParametersPipeToPrompts:
         "image",
         "mask",
     )
-    CATEGORY = "Art Venture/Parameters"
+    CATEGORY = "ArtVenture/Parameters"
     FUNCTION = "parameter_pipe_to_prompt"
 
     def parameter_pipe_to_prompt(self, pipe: Dict = {}):
@@ -378,7 +378,7 @@ class AVCheckpointMerge:
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "merge"
 
-    CATEGORY = "Art Venture/Model Merging"
+    CATEGORY = "ArtVenture/Model Merging"
     DESCRIPTION = "DEPRECATED: Use ComfyUI's native ModelMergeSimple instead"
 
     def merge(self, model1, model2, model1_weight):
@@ -406,7 +406,7 @@ class AVCheckpointMerge:
 
 
 class AVCheckpointSave(CheckpointSave):
-    CATEGORY = "Art Venture/Model Merging"
+    CATEGORY = "ArtVenture/Model Merging"
 
     @classmethod
     def INPUT_TYPES(s):

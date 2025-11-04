@@ -27,12 +27,12 @@ class PrepareImageAndMaskForInpaint:
             },
             "optional": {
                 "controlnet_image": ("IMAGE",),
-            }
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "MASK", "IMAGE", "CROP_REGION", "IMAGE")
     RETURN_NAMES = ("inpaint_image", "inpaint_mask", "overlay_image", "crop_region", "controlnet_image")
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "ArtVenture/Inpainting"
     FUNCTION = "prepare"
 
     def prepare(
@@ -77,39 +77,43 @@ class PrepareImageAndMaskForInpaint:
 
             pil_mask = numpy2pil(np_mask, "L")
             pil_img = tensor2pil(img)
-            
+
             # --- LOGIC SEPARATION ---
 
             if inpaint_masked:
                 # --- MODE 1: CROP AND RESIZE ---
                 crop_region = get_crop_region(np_mask, mask_padding)
                 crop_region = expand_crop_region(crop_region, out_width, out_height, source_width, source_height)
-                
+
                 cropped_img = pil_img.crop(crop_region)
                 cropped_mask = pil_mask.crop(crop_region)
 
                 final_pil_img = resize_image(cropped_img, out_width, out_height, ResizeMode.RESIZE_TO_FIT)
-                final_pil_mask = resize_image(cropped_mask, out_width, out_height, ResizeMode.RESIZE_TO_FIT).convert("L")
+                final_pil_mask = resize_image(cropped_mask, out_width, out_height, ResizeMode.RESIZE_TO_FIT).convert(
+                    "L"
+                )
 
                 if controlnet_image is not None:
                     pil_cimg = tensor2pil(controlnet_image[idx])
                     cn_source_width, cn_source_height = pil_cimg.size
                     scale_x = cn_source_width / source_width
                     scale_y = cn_source_height / source_height
-                    
+
                     cn_target_width = int(out_width * scale_x)
                     cn_target_height = int(out_height * scale_y)
-                    
+
                     x1, y1, x2, y2 = crop_region
                     cn_crop_region = (int(x1 * scale_x), int(y1 * scale_y), int(x2 * scale_x), int(y2 * scale_y))
                     cropped_cn_img = pil_cimg.crop(cn_crop_region)
-                    final_cn_img = resize_image(cropped_cn_img, cn_target_width, cn_target_height, ResizeMode.RESIZE_TO_FIT)
+                    final_cn_img = resize_image(
+                        cropped_cn_img, cn_target_width, cn_target_height, ResizeMode.RESIZE_TO_FIT
+                    )
                     processed_controlnet_images.append(pil2tensor(final_cn_img))
 
             else:
                 # --- MODE 2: PASS-THROUGH (NO RESIZING) ---
                 final_pil_img = pil_img
-                final_pil_mask = pil_mask # Already blurred if requested
+                final_pil_mask = pil_mask  # Already blurred if requested
                 crop_region = (0, 0, source_width, source_height)
 
                 if controlnet_image is not None:
@@ -118,7 +122,7 @@ class PrepareImageAndMaskForInpaint:
                     processed_controlnet_images.append(pil2tensor(final_cn_img))
 
             # --- COMMON LOGIC FOR BOTH MODES ---
-            
+
             # The overlay/preview should always be based on the original full-size image
             image_masked = Image.new("RGBa", (pil_img.width, pil_img.height))
             # The mask used here is the potentially blurred one, but before any cropping/resizing
@@ -128,7 +132,6 @@ class PrepareImageAndMaskForInpaint:
             images.append(pil2tensor(final_pil_img))
             masks.append(pil2tensor(final_pil_mask))
             crop_regions.append(torch.tensor(crop_region, dtype=torch.int64))
-
 
         if processed_controlnet_images:
             final_controlnet_tensor = torch.cat(processed_controlnet_images, dim=0)
@@ -158,7 +161,7 @@ class OverlayInpaintedLatent:
         }
 
     RETURN_TYPES = ("LATENT",)
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "ArtVenture/Inpainting"
     FUNCTION = "overlay"
 
     def overlay(self, original: Dict, inpainted: Dict, mask: torch.Tensor):
@@ -202,7 +205,7 @@ class OverlayInpaintedImage:
         }
 
     RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "Art Venture/Inpainting"
+    CATEGORY = "ArtVenture/Inpainting"
     FUNCTION = "overlay"
 
     def overlay(self, inpainted: torch.Tensor, overlay_image: torch.Tensor, crop_region: torch.Tensor):

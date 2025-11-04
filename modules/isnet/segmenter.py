@@ -152,7 +152,7 @@ class ISNetLoader:
 
     RETURN_TYPES = ("ISNET_MODEL",)
     FUNCTION = "load_isnet"
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
 
     def load_isnet(self, model_name):
         return (load_isnet_model(model_name),)
@@ -169,7 +169,7 @@ class DownloadISNetModel:
 
     RETURN_TYPES = ("ISNET_MODEL",)
     FUNCTION = "download_isnet"
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
 
     def download_isnet(self, model_name):
         if model_name not in folder_paths.get_filename_list("isnet"):
@@ -200,7 +200,7 @@ class ISNetSegment:
 
     RETURN_TYPES = ("IMAGE", "MASK")
     RETURN_NAMES = ("segmented", "mask")
-    CATEGORY = "Art Venture/Segmentation"
+    CATEGORY = "ArtVenture/Segmentation"
     FUNCTION = "segment_isnet"
 
     def segment_isnet(self, images: torch.Tensor, threshold, device_mode="AUTO", enabled=True, isnet_model=None):
