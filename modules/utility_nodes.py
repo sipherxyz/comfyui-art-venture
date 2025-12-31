@@ -933,7 +933,11 @@ class UtilImageScaleDownToSize(UtilImageScaleDownBy):
         return self.image_scale_down_by(images, scale_by)
 
 
-class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
+class UtilImageScaleToTotalPixels(UtilImageScaleDownBy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.upscale_model_node = ImageUpscaleWithModel()
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -960,10 +964,10 @@ class UtilImageScaleToTotalPixels(UtilImageScaleDownBy, ImageUpscaleWithModel):
             s = s.movedim(1, -1)
             return (s,)
         else:
-            s = self.upscale(upscale_model_opt, images)[0]
+            s = self.upscale_model_node.execute(upscale_model_opt, images)[0]
             return self.image_scale_down(s, width, height, "center")
 
-    def image_scale_down_to_total_pixels(self, images, megapixels, upscale_model_opt=None):
+    def image_scale_down_to_total_pixels(self, images, megapixels, *args, upscale_model_opt=None, **kwargs):
         width = images.shape[2]
         height = images.shape[1]
         scale_by = np.sqrt((megapixels * 1024 * 1024) / (width * height))
