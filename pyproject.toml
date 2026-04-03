@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-art-venture"
 description = "A comprehensive set of custom nodes for ComfyUI, focusing on utilities for image processing, JSON manipulation, model operations and working with object via URLs"
-version = "1.1.6"
+version = "1.1.7"
 license = "LICENSE"
 dependencies = [
   "timm==0.6.13",
