@@ -6,6 +6,10 @@ import { ComfyWidgets } from '../../scripts/widgets.js'
 
 import { chainCallback, addKVState, addWidgetChangeCallback } from './utils.js';
 
+// Injected by the extension init(); referenced but never defined upstream -> ReferenceError.
+// The upload widget relies on inline styles and the built-in comfy-multiline-input class, so no extra CSS is needed.
+const style = '';
+
 const supportedNodes = ['LoadImageFromUrl', 'LoadImageAsMaskFromUrl'];
 
 const formatUrl = (url) => {
