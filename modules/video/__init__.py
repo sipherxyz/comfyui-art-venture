@@ -153,7 +153,7 @@ try:
                 filename = os.path.basename(parts.path)
                 tempfile = os.path.join(temp_dir, "video")
                 if not os.path.exists(tempfile):
-                    os.makedirs(tempdir, exist_ok=True)
+                    os.makedirs(tempfile, exist_ok=True)
                 tempfile = os.path.join(tempfile, filename)
 
                 print(f'Downloading: "{url}" to {tempfile}\n')
