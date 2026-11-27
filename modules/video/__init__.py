@@ -131,7 +131,7 @@ try:
 
                     tempdir = os.path.join(temp_dir, "video")
                     if not os.path.exists(tempdir):
-                        os.makedirs(tempfile, exist_ok=True)
+                        os.makedirs(tempdir, exist_ok=True)
 
                     filename = os.path.basename(url)
                     filepath = os.path.join(tempdir, filename)
